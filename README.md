@@ -1,57 +1,81 @@
-# React + TypeScript + Vite
+# Read With Your Kids
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一个帮助家长和孩子一起阅读英文原版图书的 Web 应用。支持上传 EPUB、段落级互动、AI 翻译与插画、语音朗读，以及亲子讨论记录，提升亲子共读的效率与乐趣。
 
-Currently, two official plugins are available:
+## 主要功能
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 书籍管理：展示已上传书籍列表，支持选择并开始阅读
+- 章节与段落导航：页眉左侧显示书名，右侧选择章节与段落，并支持上一/下一段落跳转
+- 段落合并与扩展：上下扩展按钮（可缩小时出现反向缩小），支持多段合并浏览
+- 段落多选：在段落卡片右上角悬停出现复选框，选中后常显，可对多段批量执行操作
+- 语音朗读：
+  - 使用豆包 TTS 合成语音，播放箭头一键生成与播放，播放中点击可停止
+  - 合成结果保存到最后一个被选段落，卡片中显示播放入口
+  - 音色选单内置常用音色，并支持自定义音色 ID
+- 翻译：
+  - 执行按钮（双向箭头）按所选段落合并文本进行翻译
+  - 设置按钮切换提供商与模型（OpenRouter/Gemini），结果展示在段落卡片中
+- 绘图：
+  - 执行按钮（画笔）按所选段落合并文本生成插画
+  - 设置按钮编辑提示词模板与模型，插画展示在段落卡片中
+- 亲子讨论：支持家长/孩子身份记录讨论，批量模式落在最后一个被选段落
+- 工具条：右栏面板上方独立容器，四个互斥按钮（语音/翻译/图片/讨论），一次只显示一个面板
 
-## Expanding the ESLint configuration
+## 快速开始
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+浏览器打开 `http://localhost:5173/`，在首页上传 EPUB 文件并开始阅读。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 环境配置
 
-export default tseslint.config({
-  extends: [
-    // other configs...
-    // Enable lint rules for React
-    reactX.configs['recommended-typescript'],
-    // Enable lint rules for React DOM
-    reactDom.configs.recommended,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+使用 `.env` 配置：
+
+- 豆包 TTS（语音合成）：
+  - `VITE_VOLC_TTS_APP_ID`
+  - `VITE_VOLC_TTS_TOKEN`
+  - 可选：`VITE_VOLC_TTS_VOICE_TYPE`、`VITE_VOLC_TTS_LANGUAGE`、`VITE_VOLC_TTS_CLUSTER`
+- Supabase（可选，云端存储）：
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+
+注意：`.env` 与 `.env.*` 已加入 `.gitignore`，不会被提交。请不要将任何密钥放入仓库。
+
+快速配置步骤：
+
+1. 复制示例文件并编辑：
+   ```bash
+   cp env.example .env
+   ```
+2. 将你的 AppID、Token 等填入 `.env` 中的占位符
+3. 重启开发服务：`npm run dev`
+
+## 使用说明
+
+1. 上传 EPUB 后在右栏选择章节与段落
+2. 段落右上角悬停出现复选框，选中后可批量执行：
+   - 语音：播放箭头生成并播放，播放中点击停止
+   - 翻译：执行按钮进行合并翻译；设置切换提供商与模型
+   - 绘图：执行按钮生成插画；设置编辑提示词与模型
+3. 讨论面板可按家长/孩子身份添加记录；批量结果落在最后一个被选段落
+
+## 开发脚本
+
+- `npm run dev`：本地开发
+- `npm run check`：TypeScript 构建检查
+- `npm run lint`：ESLint 检查（可选）
+
+## 安全与隐私
+
+- 环境变量不会被提交；若曾经上传过 `.env`，请及时轮换密钥
+- 建议使用最小权限的密钥进行本地开发
+
+## 技术栈
+
+- Vite + React + TypeScript
+- TailwindCSS
+- Supabase（可选）
+- 豆包 TTS / OpenRouter / Gemini
