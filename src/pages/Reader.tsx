@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
 import { useBooksStore } from '../store/books'
@@ -51,6 +51,7 @@ export default function Reader() {
       return '为儿童绘制一幅高质量插画，内容来自以下段落。风格友好、色彩明亮、清晰构图、无文字，适合 6-10 岁儿童观看。段落内容：\n{paragraph}'
     }
   })
+  const [imagePromptText, setImagePromptText] = useState<string>('')
   const [imageModel, setImageModel] = useState<string>(() => {
     try {
       const env = (import.meta as any)?.env?.VITE_OPENROUTER_IMAGE_MODEL || ''
@@ -60,6 +61,9 @@ export default function Reader() {
       return 'google/gemini-2.5-flash-image'
     }
   })
+  const [imageStatus, setImageStatus] = useState<'idle'|'success'|'error'>('idle')
+  const [imageDebug, setImageDebug] = useState<any>(null)
+  const [lastImageUrl, setLastImageUrl] = useState<string>('')
   const { notes, currentRole, loadNotes, loadNotesSmart, addNote, deleteNote, setRole } = useNotesStore()
   const { translations, loadTranslation, addTranslation } = useTranslationsStore()
   const [noteInput, setNoteInput] = useState('')
@@ -94,11 +98,21 @@ export default function Reader() {
     try { const v = parseFloat(localStorage.getItem('volc_tts_pitch_ratio') || '1'); return isNaN(v)?1:v } catch { return 1 }
   })
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [autoSelectedOnce, setAutoSelectedOnce] = useState(false)
+  const listBottomRef = useRef<HTMLDivElement | null>(null)
+  
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null)
   const [lastTtsModel, setLastTtsModel] = useState<string>('')
   const [showVoiceCustom, setShowVoiceCustom] = useState(false)
   const [showTranslationConfig, setShowTranslationConfig] = useState(false)
   const [showImageConfig, setShowImageConfig] = useState(false)
+  const [isParagraphsLoading, setIsParagraphsLoading] = useState(false)
+  const [supabaseDown, setSupabaseDown] = useState(false)
+  const [cloudOnly, setCloudOnly] = useState<boolean>(() => {
+    try { return localStorage.getItem('cloud_only') === '1' } catch { return false }
+  })
+  const [appliedSavedIndex, setAppliedSavedIndex] = useState(false)
+  const [appliedSavedMerge, setAppliedSavedMerge] = useState(false)
   const VOICE_OPTIONS = [
     'BV700_streaming','BV001_streaming','BV002_streaming','BV100_streaming','BV200_streaming',
     'zh_male_lengkugege_emo_v2_mars_bigtts',
@@ -159,6 +173,66 @@ export default function Reader() {
 
   const computePrevStart = (startIndex: number) => Math.max(0, startIndex - 1)
 
+  const loadReadingStateLocal = () => {
+    try {
+      const bid = getBookKey()
+      const raw = localStorage.getItem('reading_state')
+      const map = raw ? JSON.parse(raw) : {}
+      return map[bid] || null
+    } catch { return null }
+  }
+
+  const saveReadingStateLocal = () => {
+    try {
+      if (!currentBook || !currentChapter) return
+      const bid = getBookKey()
+      const raw = localStorage.getItem('reading_state')
+      const map = raw ? JSON.parse(raw) : {}
+      map[bid] = { chapterId: currentChapter.id, paragraphIndex: currentParagraphIndex, mergedStart, mergedEnd }
+      localStorage.setItem('reading_state', JSON.stringify(map))
+    } catch {}
+  }
+
+  const loadReadingStateRemote = async (): Promise<any> => {
+    try {
+      if (supabaseDown && !cloudOnly) return null
+      if (!(isSupabaseConfigured && supabase) || !currentBook || !user) return null
+      const { data } = await supabase
+        .from('reading_progress')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('book_id', currentBook.id)
+        .single()
+      if (!data) return null
+      return { chapterId: data.chapter_id, paragraphIndex: data.paragraph_index, mergedStart: data.merged_start, mergedEnd: data.merged_end }
+    } catch { setSupabaseDown(true); return null }
+  }
+
+  const saveReadingStateRemote = async (): Promise<void> => {
+    try {
+      if (supabaseDown && !cloudOnly) return
+      if (!(isSupabaseConfigured && supabase) || !currentBook || !currentChapter || !user) return
+      const { error } = await supabase
+        .from('reading_progress')
+        .upsert({
+          user_id: user.id,
+          book_id: currentBook.id,
+          chapter_id: currentChapter.id,
+          paragraph_index: currentParagraphIndex,
+          merged_start: mergedStart,
+          merged_end: mergedEnd,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,book_id' })
+      if (error) { setSupabaseDown(true); return }
+    } catch { setSupabaseDown(true) }
+  }
+
+  const getSavedState = async () => {
+    let saved = await loadReadingStateRemote()
+    if (!saved) saved = loadReadingStateLocal()
+    return saved
+  }
+
   const getOrderedSelectedIds = () => {
     if ((selectedIds || []).length === 0) return [getCurrentParagraphId()]
     const order = paragraphs.map(p => getParagraphId(p))
@@ -182,7 +256,7 @@ export default function Reader() {
     const newTrans: Record<string, string> = { ...mergedTranslationsMap }
     const newNotes: Record<string, Note[]> = { ...mergedNotesMap }
     const newAud: Record<string, { id: string, audio_url: string }[]> = { ...mergedAudiosMap }
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && (!supabaseDown || cloudOnly)) {
       for (const p of slice) {
         const pid = getParagraphId(p)
         try {
@@ -249,6 +323,38 @@ export default function Reader() {
     setMergedAudiosMap(newAud)
   }
 
+  const shrinkTop = () => {
+    if (paragraphs.length === 0) return
+    if (mergedEnd > mergedStart) {
+      const ne = Math.max(mergedStart, mergedEnd - 1)
+      setMergedEnd(ne)
+      ensureMergedData(mergedStart, ne)
+    }
+  }
+
+  const extendDown = () => {
+    if (paragraphs.length === 0) return
+    if (mergedEnd < paragraphs.length - 1) {
+      const ne = mergedEnd + 1
+      setMergedEnd(ne)
+      ensureMergedData(mergedStart, ne)
+      try { listBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) } catch {}
+    }
+  }
+
+  useEffect(() => {
+    if (showImagePanel) {
+      try {
+        const ids = getOrderedSelectedIds()
+        const text = getCombinedText(ids)
+        const v = imagePromptTemplate.includes('{paragraph}')
+          ? imagePromptTemplate.replace('{paragraph}', text)
+          : `${imagePromptTemplate}\n\n${text}`
+        setImagePromptText(v)
+      } catch {}
+    }
+  }, [showImagePanel, selectedIds, paragraphs, imagePromptTemplate])
+
   const handlePrevChapter = () => {
     if (!chapters || chapters.length === 0 || !currentChapter) return
     const idx = chapters.findIndex(c => c.id === currentChapter.id)
@@ -258,8 +364,10 @@ export default function Reader() {
       setCurrentParagraphIndex(0)
       setShowTranslation(false)
       if (isSupabaseConfigured && currentBook) {
-        fetchParagraphs(ch.id)
+        setIsParagraphsLoading(true)
+        fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
       } else {
+        setIsParagraphsLoading(true)
         try {
           const raw = localStorage.getItem('demo_paragraphs')
           if (raw && currentBook) {
@@ -269,6 +377,7 @@ export default function Reader() {
             setParagraphs(list)
           }
         } catch {}
+        setIsParagraphsLoading(false)
       }
     }
   }
@@ -282,8 +391,10 @@ export default function Reader() {
       setCurrentParagraphIndex(0)
       setShowTranslation(false)
       if (isSupabaseConfigured && currentBook) {
-        fetchParagraphs(ch.id)
+        setIsParagraphsLoading(true)
+        fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
       } else {
+        setIsParagraphsLoading(true)
         try {
           const raw = localStorage.getItem('demo_paragraphs')
           if (raw && currentBook) {
@@ -293,6 +404,7 @@ export default function Reader() {
             setParagraphs(list)
           }
         } catch {}
+        setIsParagraphsLoading(false)
       }
     }
   }
@@ -303,7 +415,7 @@ export default function Reader() {
       return
     }
 
-    if (!currentBook && bookId) {
+    if ((bookId && (!currentBook || currentBook.id !== bookId))) {
       // Try to resolve currentBook from store or localStorage
       const storeBook = (useBooksStore.getState().books || []).find(b => b.id === bookId)
       if (storeBook) {
@@ -318,12 +430,28 @@ export default function Reader() {
           }
         } catch {}
       }
+      try {
+        setParagraphs([])
+        setMergedStart(0)
+        setMergedEnd(0)
+        setSelectedIds([])
+        setAppliedSavedIndex(false)
+        setAppliedSavedMerge(false)
+        setMergedImagesMap({})
+        setMergedTranslationsMap({})
+        setMergedNotesMap({})
+        setMergedAudiosMap({})
+        setHiddenMergedIds([])
+        setDeleteMenuPid(null)
+        setIsParagraphsLoading(true)
+      } catch {}
     }
 
     if (currentBook && !currentChapter) {
       if (isSupabaseConfigured) {
         fetchChapters(currentBook.id)
       } else {
+        setIsParagraphsLoading(true)
         try {
           const rawCh = localStorage.getItem('demo_chapters')
           const rawPara = localStorage.getItem('demo_paragraphs')
@@ -331,25 +459,71 @@ export default function Reader() {
           const mapPara = rawPara ? JSON.parse(rawPara) : {}
           const chList = mapCh[currentBook.id] || []
           if (chList.length > 0) {
-            setCurrentChapter(chList[0])
+            const saved = loadReadingStateLocal()
+            const target = saved?.chapterId ? (chList.find(c => c.id === saved.chapterId) || chList[0]) : chList[0]
+            setCurrentChapter(target)
             const chapterParasMap = mapPara[currentBook.id] || {}
-            const paraList = chapterParasMap[chList[0].id] || []
-            if (paraList.length > 0) setParagraphs(paraList)
+            const paraList = chapterParasMap[target.id] || []
+            if (paraList.length > 0) {
+              setParagraphs(paraList)
+              const idx = Math.max(0, Math.min(saved?.paragraphIndex ?? 0, paraList.length - 1))
+              setCurrentParagraphIndex(idx)
+            }
           }
         } catch {}
+        setIsParagraphsLoading(false)
       }
-      setCurrentParagraphIndex(0)
     }
   }, [user, navigate, currentBook, bookId, setCurrentBook, setCurrentChapter, setParagraphs])
 
   useEffect(() => {
     if (isSupabaseConfigured && !currentChapter && chapters.length > 0) {
-      const ch = chapters[0]
-      setCurrentChapter(ch)
-      setCurrentParagraphIndex(0)
-      fetchParagraphs(ch.id)
+      (async () => {
+        let saved = await loadReadingStateRemote()
+        if (!saved) { saved = loadReadingStateLocal() }
+        const ch = saved?.chapterId ? (chapters.find(c => c.id === saved.chapterId) || chapters[0]) : chapters[0]
+        setCurrentChapter(ch)
+        const idx = Math.max(0, saved?.paragraphIndex ?? 0)
+        setCurrentParagraphIndex(idx)
+        setIsParagraphsLoading(true)
+        fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
+      })()
     }
   }, [chapters, currentChapter])
+
+  useEffect(() => {
+    (async () => {
+      if (currentBook && currentChapter && paragraphs.length > 0 && !appliedSavedIndex) {
+        const saved = await getSavedState()
+        if (saved?.chapterId && saved.chapterId !== currentChapter.id) {
+          const target = (useBooksStore.getState().chapters || []).find(c => c.id === saved.chapterId)
+          if (target) {
+            setCurrentChapter(target)
+            try {
+              const rawPara = localStorage.getItem('demo_paragraphs')
+              const mapPara = rawPara ? JSON.parse(rawPara) : {}
+              const bookId = getBookKey()
+              const chapterParasMap = mapPara[bookId] || {}
+              const list = chapterParasMap[target.id] || []
+              if (Array.isArray(list) && list.length > 0) {
+                setParagraphs(list)
+              }
+            } catch {}
+            if (isSupabaseConfigured && !supabaseDown) {
+              setIsParagraphsLoading(true)
+              fetchParagraphs(target.id).finally(() => setIsParagraphsLoading(false))
+            }
+            return
+          }
+        }
+        if (typeof saved?.paragraphIndex === 'number') {
+          const idx = Math.max(0, Math.min(saved.paragraphIndex, paragraphs.length - 1))
+          setCurrentParagraphIndex(idx)
+        }
+        setAppliedSavedIndex(true)
+      }
+    })()
+  }, [currentBook, currentChapter, paragraphs])
 
   const handleTextToSpeech = async () => {
     if (paragraphs.length === 0) return
@@ -524,38 +698,78 @@ export default function Reader() {
     if (paragraphs.length === 0 || isGeneratingImage) return
     try {
       setIsGeneratingImage(true)
+      setImageStatus('idle')
+      setImageDebug(null)
       const bid = getBookKey()
       const ids = getOrderedSelectedIds()
       const targetId = ids[ids.length - 1]
       const text = getCombinedText(ids)
-      const prompt = imagePromptTemplate.includes('{paragraph}')
-        ? imagePromptTemplate.replace('{paragraph}', text)
-        : `${imagePromptTemplate}\n\n${text}`
+      const prompt = (imagePromptText && imagePromptText.length > 0)
+        ? imagePromptText
+        : (imagePromptTemplate.includes('{paragraph}') ? imagePromptTemplate.replace('{paragraph}', text) : `${imagePromptTemplate}\n\n${text}`)
       const img = await generateImageWithOpenRouter(prompt, '1024x1024')
       if (currentBook && currentChapter) {
         addImage(bid, currentChapter.id, targetId, img, prompt)
+        ensureMergedData(mergedStart, mergedEnd)
       }
+      setLastImageUrl(typeof img === 'string' ? img : (img?.url || ''))
+      setImageStatus('success')
+      setImageDebug({ prompt, model: imageModel })
     } catch (e) {
-      alert(e instanceof Error ? e.message : '生成图片失败')
+      const msg = e instanceof Error ? e.message : '生成图片失败'
+      alert(msg)
+      setImageStatus('error')
+      setImageDebug({ error: msg })
     } finally {
       setIsGeneratingImage(false)
     }
   }
 
   const handlePreviousParagraph = () => {
+    if (mergedEnd > mergedStart) {
+      const win = mergedEnd - mergedStart + 1
+      const ns = Math.max(0, mergedStart - 1)
+      const ne = Math.min(paragraphs.length - 1, ns + win - 1)
+      setMergedStart(ns)
+      setMergedEnd(ne)
+      setCurrentParagraphIndex(ns)
+      
+      ensureMergedData(ns, ne)
+      return
+    }
     if (currentParagraphIndex > 0) {
       const prevStart = computePrevStart(currentParagraphIndex)
       setCurrentParagraphIndex(prevStart)
-      setShowTranslation(false)
-      setTranslationText('')
+      setMergedStart(prevStart)
+      setMergedEnd(prevStart)
+      
+      ensureMergedData(prevStart, prevStart)
+    } else if (paragraphs.length <= 1) {
+      handlePrevChapter()
     }
   }
 
   const handleNextParagraph = () => {
+    if (mergedEnd > mergedStart) {
+      const win = mergedEnd - mergedStart + 1
+      const ne = Math.min(paragraphs.length - 1, mergedEnd + 1)
+      const ns = Math.max(0, ne - win + 1)
+      setMergedStart(ns)
+      setMergedEnd(ne)
+      setCurrentParagraphIndex(ns)
+      
+      ensureMergedData(ns, ne)
+      return
+    }
     if (currentParagraphIndex < paragraphs.length - 1) {
-      setCurrentParagraphIndex(currentParagraphIndex + 1)
-      setShowTranslation(false)
-      setTranslationText('')
+      const nextIndex = currentParagraphIndex + 1
+      setCurrentParagraphIndex(nextIndex)
+      setMergedStart(nextIndex)
+      setMergedEnd(nextIndex)
+      
+      ensureMergedData(nextIndex, nextIndex)
+    } else if (paragraphs.length <= 1) {
+      handleNextChapter()
     }
   }
 
@@ -578,16 +792,49 @@ export default function Reader() {
 
   useEffect(() => {
     if (paragraphs.length > 0) {
-      setMergedStart(currentParagraphIndex)
-      setMergedEnd(currentParagraphIndex)
-      setMergedImagesMap({})
-      setMergedTranslationsMap({})
-      setMergedNotesMap({})
-      setHiddenMergedIds([])
-      setDeleteMenuPid(null)
-      ensureMergedData(currentParagraphIndex, currentParagraphIndex)
+      const saved = loadReadingStateLocal()
+      if (!appliedSavedMerge && saved && typeof saved.mergedStart === 'number' && typeof saved.mergedEnd === 'number') {
+        const s = Math.max(0, Math.min(saved.mergedStart, paragraphs.length - 1))
+        const e = Math.max(s, Math.min(saved.mergedEnd, paragraphs.length - 1))
+        setMergedStart(s)
+        setMergedEnd(e)
+        setCurrentParagraphIndex(s)
+        setAppliedSavedMerge(true)
+        setMergedImagesMap({})
+        setMergedTranslationsMap({})
+        setMergedNotesMap({})
+        setHiddenMergedIds([])
+        setDeleteMenuPid(null)
+        ensureMergedData(s, e)
+      } else {
+        ensureMergedData(mergedStart, mergedEnd)
+      }
     }
-  }, [currentParagraphIndex, paragraphs])
+  }, [paragraphs, mergedStart, mergedEnd])
+
+  useEffect(() => {
+    if (paragraphs.length > 0 && selectedIds.length === 0 && !autoSelectedOnce) {
+      try {
+        const pid = getCurrentParagraphId()
+        if (pid) { setSelectedIds([pid]); setAutoSelectedOnce(true) }
+      } catch {}
+    }
+  }, [paragraphs, currentParagraphIndex, autoSelectedOnce])
+
+  useEffect(() => {
+    try {
+      const vis = paragraphs
+        .slice(mergedStart, Math.min(mergedEnd + 1, paragraphs.length))
+        .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
+        .map(pp => getParagraphId(pp))
+      setSelectedIds(prev => prev.filter(id => vis.includes(id)))
+    } catch {}
+  }, [paragraphs, mergedStart, mergedEnd, hiddenMergedIds])
+
+  useEffect(() => {
+    saveReadingStateLocal()
+    saveReadingStateRemote()
+  }, [currentBook, currentChapter, currentParagraphIndex, mergedStart, mergedEnd])
 
   useEffect(() => {
     if (currentBook && currentChapter && paragraphs.length > 0) {
@@ -617,13 +864,40 @@ export default function Reader() {
     )
   }
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const tag = (target && target.tagName) || ''
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (target && target.getAttribute('contenteditable') === 'true')) {
+        return
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        handlePreviousParagraph()
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        handleNextParagraph()
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        extendDown()
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        shrinkTop()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [handlePreviousParagraph, handleNextParagraph, mergedStart, mergedEnd, paragraphs])
+
   
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-screen-2xl mx-auto px-0">
+        <div className="max-w-screen-2xl mx-auto px-6 lg:px-10">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center">
               <button
@@ -647,8 +921,10 @@ export default function Reader() {
                     setCurrentParagraphIndex(0)
                     setShowTranslation(false)
                     if (isSupabaseConfigured && currentBook) {
-                      fetchParagraphs(ch.id)
+                      setIsParagraphsLoading(true)
+                      fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
                     } else {
+                      setIsParagraphsLoading(true)
                       try {
                         const raw = localStorage.getItem('demo_paragraphs')
                         if (raw && currentBook) {
@@ -662,6 +938,7 @@ export default function Reader() {
                       } catch {
                         setParagraphs([])
                       }
+                      setIsParagraphsLoading(false)
                     }
                   }
                 }}
@@ -691,7 +968,6 @@ export default function Reader() {
                   const v = parseInt(e.target.value, 10)
                   if (!isNaN(v)) {
                     setCurrentParagraphIndex(Math.max(0, Math.min(v - 1, paragraphs.length - 1)))
-                    setShowTranslation(false)
                   }
                 }}
                 className="w-16 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white text-center"
@@ -702,14 +978,14 @@ export default function Reader() {
               </select>
               <button
                 onClick={handlePreviousParagraph}
-                disabled={currentParagraphIndex === 0}
+                disabled={currentParagraphIndex === 0 && (!currentChapter || (chapters.findIndex(c => c.id === currentChapter.id) <= 0))}
                 className="inline-flex items-center justify-center w-9 h-9 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
                 onClick={handleNextParagraph}
-                disabled={currentParagraphIndex >= paragraphs.length - 1}
+                disabled={(currentParagraphIndex >= paragraphs.length - 1) && (!currentChapter || (chapters.findIndex(c => c.id === currentChapter.id) >= chapters.length - 1))}
                 className="inline-flex items-center justify-center w-9 h-9 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -727,7 +1003,9 @@ export default function Reader() {
           <div className="lg:col-span-3">
             <div className="bg-white rounded-lg shadow-md p-8 mb-6 w-full">
               <div className="w-full">
-                {paragraphs.length === 0 ? (
+                {isParagraphsLoading ? (
+                  <div className="text-center text-gray-600 py-12">读取中...</div>
+                ) : paragraphs.length === 0 ? (
                   <div className="text-center text-gray-600 py-12">
                     该图书尚未解析到段落，请返回首页重新上传以解析章节。
                   </div>
@@ -738,20 +1016,20 @@ export default function Reader() {
                         {mergedEnd > mergedStart ? (
                           <div className="grid grid-cols-3 gap-1">
                             <button
-                              onClick={() => { const ns = mergedStart - 1; setMergedStart(ns); ensureMergedData(ns, mergedEnd) }}
-                              className="col-span-2 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
-                              aria-label="向上扩展"
-                              title="向上扩展"
-                            >
-                              <ChevronUp className="h-4 w-4" />
-                            </button>
-                            <button
                               onClick={() => { const ns = mergedStart + 1; setMergedStart(ns); ensureMergedData(ns, mergedEnd) }}
                               className="col-span-1 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
                               aria-label="缩小上方"
                               title="缩小上方"
                             >
                               <ChevronDown className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => { const ns = mergedStart - 1; setMergedStart(ns); ensureMergedData(ns, mergedEnd) }}
+                              className="col-span-2 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
+                              aria-label="向上扩展"
+                              title="向上扩展"
+                            >
+                              <ChevronUp className="h-4 w-4" />
                             </button>
                           </div>
                         ) : (
@@ -766,8 +1044,8 @@ export default function Reader() {
                         )}
                       </div>
                     )}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                      <div className="lg:col-span-12 space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+                      <div className="lg:col-span-12 space-y-2">
                         {(() => {
                           const list = paragraphs
                             .slice(mergedStart, Math.min(mergedEnd + 1, paragraphs.length))
@@ -780,9 +1058,10 @@ export default function Reader() {
                             const tText = mergedTranslationsMap[pid] || storeText
                             const nList = mergedNotesMap[pid] || []
                             const aList = mergedAudiosMap[pid] || []
+                            const isSelectedBox = selectedIds.includes(pid)
                             return (
-                              <div key={pid} className="group w-full border border-slate-200 rounded-lg p-4 relative">
-                                <div className={`absolute top-2 right-2 transition ${selectedIds.includes(pid) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                              <div key={pid} className={`group w-full rounded-lg p-3 relative border ${isSelectedBox ? 'border-blue-500' : 'border-slate-200'}`}>
+                                <div className="absolute top-2 right-2 transition opacity-0 group-hover:opacity-100">
                                   <input
                                     type="checkbox"
                                     checked={selectedIds.includes(pid)}
@@ -793,15 +1072,15 @@ export default function Reader() {
                                 </div>
                                 <p className="text-lg leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words">{p.content}</p>
                                 {tText && (
-                                  <div className="mt-3 bg-blue-50 border border-blue-200 rounded-md p-3 text-sm text-blue-900 whitespace-pre-wrap break-words">{tText}</div>
+                                  <div className="mt-2 bg-blue-50 border border-blue-200 rounded-md p-2 text-sm text-blue-900 whitespace-pre-wrap break-words">{tText}</div>
                                 )}
                                 {imgUrl && (
-                                  <div className="mt-3 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                                  <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
                                     <img src={imgUrl} alt="插画" className="w-full object-contain" />
                                   </div>
                                 )}
                                 {nList.length > 0 && (
-                                  <div className="mt-3 space-y-2">
+                                  <div className="mt-2 space-y-1">
                                     {nList.map(n => (
                                       <div key={n.id} className="border border-slate-200 rounded-md p-2">
                                         <div className="flex items-center justify-between mb-1">
@@ -814,28 +1093,21 @@ export default function Reader() {
                                   </div>
                                 )}
                                 {aList.length > 0 && (
-                                  <div className="mt-3">
+                                  <div className="mt-2">
                                     <button onClick={()=>{ const url=aList[0]?.audio_url||''; if(url){ const audio=new Audio(url); audio.play() } }} className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700">播放语音</button>
                                   </div>
                                 )}
                               </div>
                             )
                           })
-                        })()}
+                          })()}
+                          <div ref={listBottomRef} />
                       </div>
                     </div>
                     {mergedEnd < paragraphs.length - 1 && (
                       <div className="w-full">
                         {mergedEnd > mergedStart ? (
                           <div className="grid grid-cols-3 gap-1">
-                            <button
-                              onClick={() => { const ne = mergedEnd + 1; setMergedEnd(ne); ensureMergedData(mergedStart, ne) }}
-                              className="col-span-2 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
-                              aria-label="向下扩展"
-                              title="向下扩展"
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </button>
                             <button
                               onClick={() => { const ne = Math.max(mergedStart, mergedEnd - 1); setMergedEnd(ne); ensureMergedData(mergedStart, ne) }}
                               className="col-span-1 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
@@ -844,10 +1116,18 @@ export default function Reader() {
                             >
                               <ChevronUp className="h-4 w-4" />
                             </button>
+                            <button
+                              onClick={extendDown}
+                              className="col-span-2 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
+                              aria-label="向下扩展"
+                              title="向下扩展"
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </button>
                           </div>
                         ) : (
                           <button
-                            onClick={() => { const ne = mergedEnd + 1; setMergedEnd(ne); ensureMergedData(mergedStart, ne) }}
+                            onClick={extendDown}
                             className="w-full h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
                             aria-label="向下扩展"
                             title="向下扩展"
@@ -866,25 +1146,24 @@ export default function Reader() {
           </div>
 
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-4 py-2 flex items-center justify-between w-full">
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-4 py-2 flex items-center justify-evenly w-full">
               <button
                 onClick={() => { const next = !showVoicePanel; setShowVoicePanel(next); if (next) { setShowTranslation(false); setShowImagePanel(false); setShowDiscussion(false) } }}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showVoicePanel ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isPlaying ? 'bg-blue-100 text-blue-600 animate-pulse' : (showVoicePanel ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}`}
                 title="语音"
               >
                 <Volume2 className="h-5 w-5" />
               </button>
               <button
                 onClick={() => { const next = !showTranslation; setShowTranslation(next); if (next) { setShowImagePanel(false); setShowDiscussion(false); setShowVoicePanel(false) } }}
-                disabled={isTranslating}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isTranslating ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showTranslation ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 title="翻译"
               >
                 <Languages className="h-5 w-5" />
               </button>
               <button
                 onClick={() => { const next = !showImagePanel; setShowImagePanel(next); if (next) { setShowTranslation(false); setShowDiscussion(false); setShowVoicePanel(false) } }}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showImagePanel ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : (showImagePanel ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}`}
                 title="图片"
               >
                 <Image className="h-5 w-5" />
@@ -905,14 +1184,22 @@ export default function Reader() {
               <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
                 
                 <div>
-                  <div className="mb-2">
-                    <button onClick={playLatestAudio} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title={currentAudio? '停止朗读':'生成并播放'}>
+                  <div className="mb-2 px-4 flex items-center justify-evenly">
+                    <button onClick={playLatestAudio} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isPlaying ? 'bg-blue-100 text-blue-600 animate-pulse' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title={currentAudio? '停止朗读':'生成并播放'}>
                       {currentAudio ? (<Square className="h-5 w-5" />) : (<Play className="h-5 w-5" />)}
                     </button>
-                    <button onClick={()=>setShowTtsConfig(!showTtsConfig)} className="ml-2 w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="参数">
+                    <button onClick={()=>setShowTtsConfig(!showTtsConfig)} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="参数">
                       <Settings className="h-5 w-5" />
                     </button>
                   </div>
+                  {(() => { const ids = getOrderedSelectedIds(); const preview = getCombinedText(ids); return (
+                    <div className="mb-2">
+                      <div className="text-xs text-slate-600 mb-1">待阅读文本</div>
+                      <div className="border border-slate-200 rounded-md p-2 bg-white text-sm text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
+                        {preview && preview.length > 0 ? preview : <span className="text-slate-400">请在左侧选中段落文本</span>}
+                      </div>
+                    </div>
+                  ) })()}
                   {showTtsConfig && (
                     <div className="border border-slate-200 rounded-md p-3 mb-3">
                       <div className="grid grid-cols-2 gap-3">
@@ -972,16 +1259,27 @@ export default function Reader() {
             )}
             {showImagePanel && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
-                <div className="mb-2">
-                  <button onClick={handleImageGeneration} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="执行绘图">
+                <div className="mb-2 px-4 flex items-center justify-evenly">
+                  <button onClick={handleImageGeneration} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title="执行绘图">
                     <Brush className="h-5 w-5" />
                   </button>
-                  <button onClick={()=>setShowImageConfig(!showImageConfig)} className="ml-2 w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="设置">
+                  <button onClick={()=>setShowImageConfig(!showImageConfig)} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="设置">
                     <Settings className="h-5 w-5" />
                   </button>
                 </div>
+                <div className="border border-slate-200 rounded-md p-3 mb-3">
+                  <label className="block text-slate-700 text-xs mb-1">提示词</label>
+                  <textarea
+                    value={imagePromptText}
+                    onChange={(e) => { setImagePromptText(e.target.value) }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    rows={5}
+                    placeholder="已填充选中文本，可直接编辑提示词"
+                  />
+                </div>
                 {showImageConfig && (
                   <div className="border border-slate-200 rounded-md p-3 mb-3">
+                    <label className="block text-slate-700 text-xs mb-1">提示词模板</label>
                     <textarea
                       value={imagePromptTemplate}
                       onChange={(e) => {
@@ -989,10 +1287,11 @@ export default function Reader() {
                         try { localStorage.setItem('image_prompt_template', e.target.value) } catch {}
                       }}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      rows={5}
-                      placeholder="填写图片生成的提示词模板，使用 {paragraph} 占位符"
+                      rows={4}
+                      placeholder="使用 {paragraph} 占位符插入选中文本"
                     />
                     <div className="mt-3">
+                      <label className="block text-slate-700 text-xs mb-1">模型</label>
                       <select
                         value={imageModel}
                         onChange={(e) => {
@@ -1009,16 +1308,34 @@ export default function Reader() {
                 )}
                 <div className="mt-2 text-xs text-slate-700">
                   {isGeneratingImage && <span>生成中...</span>}
+                  {!isGeneratingImage && imageStatus==='success' && <span>绘图成功（模型: {imageModel}）</span>}
+                  {!isGeneratingImage && imageStatus==='error' && <span className="text-red-700">绘图失败</span>}
                 </div>
+                {imageStatus==='success' && lastImageUrl && (
+                  <div className="mt-3 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                    <img src={lastImageUrl} alt="最新生成预览" className="w-full object-contain" />
+                  </div>
+                )}
+                {imageDebug?.error && (
+                  <div className="mt-2 text-xs text-red-700">错误：{String(imageDebug.error)}</div>
+                )}
+                {imageDebug?.prompt && (
+                  <div className="mt-2">
+                    <div className="text-xs text-slate-600 mb-1">使用的提示词</div>
+                    <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-800 whitespace-pre-wrap break-words">
+                      {String(imageDebug.prompt)}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {showTranslation && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-blue-200 relative">
-                <div className="mb-2">
-                  <button onClick={handleTranslation} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="执行翻译">
-                    <RefreshCw className="h-5 w-5" />
+                <div className="mb-2 px-4 flex items-center justify-evenly">
+                  <button onClick={handleTranslation} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isTranslating ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title="执行翻译">
+                    <RefreshCw className={`h-5 w-5 ${isTranslating ? 'animate-spin' : ''}`} />
                   </button>
-                  <button onClick={()=>setShowTranslationConfig(!showTranslationConfig)} className="ml-2 w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="设置">
+                  <button onClick={()=>setShowTranslationConfig(!showTranslationConfig)} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="设置">
                     <Settings className="h-5 w-5" />
                   </button>
                 </div>
@@ -1051,9 +1368,43 @@ export default function Reader() {
                     </div>
                   </div>
                 )}
+                {(() => {
+                  const ids = getOrderedSelectedIds()
+                  const preview = getCombinedText(ids)
+                  return (
+                    <div className="mb-2">
+                      <div className="text-xs text-slate-600 mb-1">待翻译文本</div>
+                      <div className="border border-slate-200 rounded-md p-2 bg-white text-sm text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
+                        {preview && preview.length > 0 ? preview : <span className="text-slate-400">请在左侧选中段落文本</span>}
+                      </div>
+                    </div>
+                  )
+                })()}
                 <div className="mt-2 text-xs text-slate-700">
-                  {isTranslating && <span>翻译中...</span>}
+                  {(() => {
+                    const ids = getOrderedSelectedIds()
+                    const targetId = ids[ids.length - 1]
+                    const storeText = (translations || []).find(t => t.paragraph_id === targetId)?.translated_text || ''
+                    const tText = mergedTranslationsMap[targetId] || storeText
+                    if (isTranslating) return <span>翻译中...</span>
+                    if (tText && tText.length > 0) return <span>翻译完成（提供商: {translationProvider}{translationProvider==='openrouter' ? `/${translationOpenRouterModel}` : ''}）</span>
+                    return <span className="text-slate-500">尚未翻译</span>
+                  })()}
                 </div>
+                {(() => {
+                  const ids = getOrderedSelectedIds()
+                  const targetId = ids[ids.length - 1]
+                  const storeText = (translations || []).find(t => t.paragraph_id === targetId)?.translated_text || ''
+                  const tText = mergedTranslationsMap[targetId] || storeText
+                  if (tText && tText.length > 0) {
+                    return (
+                      <div className="mt-3 border border-blue-200 rounded-md p-3 bg-blue-50 text-sm text-blue-900 whitespace-pre-wrap break-words">
+                        {tText}
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
               </div>
             )}
             {showDiscussion && (

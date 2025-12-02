@@ -37,7 +37,8 @@ function dataUrlToBlob(dataUrl: string): Blob | null {
 export const useAudiosStore = create<AudiosState>((set, get) => ({
   audios: [],
   loadAudios: (bookId: string, paragraphId: string) => {
-    const supa = isSupabaseConfigured && supabase
+    const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
+    const supa = isSupabaseConfigured && supabase && (!(useAudiosStore as any)._supaDown || cloudOnly)
     if (supa) {
       ;(async () => {
         try {
@@ -56,7 +57,16 @@ export const useAudiosStore = create<AudiosState>((set, get) => ({
             created_at: row.created_at,
           }))
           set({ audios: list })
-        } catch { set({ audios: [] }) }
+        } catch {
+          if (!cloudOnly) { (useAudiosStore as any)._supaDown = true }
+          try {
+            const raw = localStorage.getItem(KEY)
+            const map = raw ? JSON.parse(raw) : {}
+            const bookMap = map[bookId] || {}
+            const list: AudioItem[] = bookMap[paragraphId] || []
+            set({ audios: list })
+          } catch { set({ audios: [] }) }
+        }
       })()
       return
     }
@@ -155,4 +165,3 @@ export const useAudiosStore = create<AudiosState>((set, get) => ({
     } catch {}
   },
 }))
-

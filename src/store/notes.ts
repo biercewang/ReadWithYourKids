@@ -19,7 +19,8 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   notes: [],
   currentRole: 'parent',
   loadNotes: (bookId: string, paragraphId: string) => {
-    const supa = isSupabaseConfigured && supabase
+    const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
+    const supa = isSupabaseConfigured && supabase && (!(useNotesStore as any)._supaDown || cloudOnly)
     if (supa) {
       ;(async () => {
         try {
@@ -40,7 +41,16 @@ export const useNotesStore = create<NotesState>((set, get) => ({
           }))
           set({ notes: list })
         } catch {
-          set({ notes: [] })
+          if (!cloudOnly) { (useNotesStore as any)._supaDown = true }
+          try {
+            const raw = localStorage.getItem(KEY)
+            const map = raw ? JSON.parse(raw) : {}
+            const bookMap = map[bookId] || {}
+            const list: Note[] = bookMap[paragraphId] || []
+            set({ notes: list })
+          } catch {
+            set({ notes: [] })
+          }
         }
       })()
       return
@@ -56,7 +66,8 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     }
   },
   loadNotesSmart: (bookIds: string[], paragraphId: string) => {
-    const supa = isSupabaseConfigured && supabase
+    const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
+    const supa = isSupabaseConfigured && supabase && (!(useNotesStore as any)._supaDown || cloudOnly)
     if (supa) {
       get().loadNotes(bookIds[0], paragraphId)
       return

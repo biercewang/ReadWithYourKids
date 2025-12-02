@@ -64,20 +64,52 @@ export class EPUBParser {
       })
       const basePath = fullPath.replace(/[^\/]+$/, '')
       const chapters: ParsedChapter[] = []
-      for (let i = 0; i < spineIds.length; i++) {
-        const id = spineIds[i]
-        const href = manifest[id]
-        if (!href) continue
-        const xhtmlStr = await zip.file(basePath + href)?.async('string')
-        if (!xhtmlStr) continue
-        const paragraphs = EPUBParser.extractParagraphs(xhtmlStr)
-        if ((paragraphs?.length || 0) === 0 || EPUBParser.isInvalidParagraphs(paragraphs)) continue
-        chapters.push({
-          title: `Chapter ${i + 1}`,
-          content: paragraphs.map(p => p.content).join('\n\n'),
-          paragraphs
-        })
-        if (chapters.length >= 50) break
+
+      const tocEntries = await EPUBParser.getTocEntriesFromOpf(zip, opf, basePath)
+      if (tocEntries.length > 0) {
+        const grouped: Record<string, { frag: string|null, title: string }[]> = {}
+        for (const e of tocEntries) {
+          const arr = grouped[e.path] || []
+          arr.push({ frag: e.frag, title: e.title })
+          grouped[e.path] = arr
+        }
+        let chapterIdx = 0
+        for (const path of Object.keys(grouped)) {
+          const segs = await EPUBParser.segmentFileByToc(zip, path, grouped[path])
+          for (const seg of segs) {
+            const paragraphs = EPUBParser.extractParagraphs(seg.html)
+            if ((paragraphs?.length || 0) === 0 || EPUBParser.isInvalidParagraphs(paragraphs)) continue
+            const finalTitle = seg.title && seg.title.trim().length > 0
+              ? `(${chapterIdx + 1}) ${seg.title.trim()}`
+              : `(${chapterIdx + 1})`
+            chapters.push({
+              title: finalTitle,
+              content: paragraphs.map(p => p.content).join('\n\n'),
+              paragraphs
+            })
+            chapterIdx++
+            if (chapters.length >= 200) break
+          }
+          if (chapters.length >= 200) break
+        }
+      }
+
+      if (chapters.length === 0) {
+        for (let i = 0; i < spineIds.length; i++) {
+          const id = spineIds[i]
+          const href = manifest[id]
+          if (!href) continue
+          const xhtmlStr = await zip.file(basePath + href)?.async('string')
+          if (!xhtmlStr) continue
+          const paragraphs = EPUBParser.extractParagraphs(xhtmlStr)
+          if ((paragraphs?.length || 0) === 0 || EPUBParser.isInvalidParagraphs(paragraphs)) continue
+          chapters.push({
+            title: `(${i + 1})`,
+            content: paragraphs.map(p => p.content).join('\n\n'),
+            paragraphs
+          })
+          if (chapters.length >= 50) break
+        }
       }
       if (chapters.length === 0) {
         const firstHref = manifest[spineIds[0]]
@@ -85,7 +117,7 @@ export class EPUBParser {
         const paragraphs = EPUBParser.extractParagraphs(xhtmlStr || '')
         if ((paragraphs?.length || 0) > 0 && !EPUBParser.isInvalidParagraphs(paragraphs)) {
           chapters.push({
-            title: '正文',
+            title: '(1) 正文',
             content: paragraphs.map(p => p.content).join('\n\n'),
             paragraphs
           })
@@ -147,5 +179,120 @@ export class EPUBParser {
     if (joined.includes('this page contains the following errors') || joined.includes('invalid element name')) return true
     const avgLen = paragraphs.reduce((acc, p) => acc + p.content.length, 0) / paragraphs.length
     return avgLen < 8
+  }
+
+  private static normPath(baseDir: string, href: string): string {
+    const base = baseDir.endsWith('/') ? baseDir : baseDir + '/'
+    const parts = (base + href).split('/').filter(Boolean)
+    const stack: string[] = []
+    for (const p of parts) {
+      if (p === '.') continue
+      if (p === '..') { stack.pop(); continue }
+      stack.push(p)
+    }
+    return stack.join('/')
+  }
+
+  private static async getTocEntriesFromOpf(zip: any, opf: Document, basePath: string): Promise<{ path: string, frag: string|null, title: string }[]> {
+    let navHref: string | null = null
+    let ncxHref: string | null = null
+    opf.querySelectorAll('manifest > item').forEach(it => {
+      const href = it.getAttribute('href') || ''
+      const mediaType = it.getAttribute('media-type') || ''
+      const props = it.getAttribute('properties') || ''
+      if (!navHref && props.includes('nav') && href) navHref = href
+      if (!ncxHref && mediaType === 'application/x-dtbncx+xml' && href) ncxHref = href
+    })
+    const entries: { path: string, frag: string|null, title: string }[] = []
+    if (navHref) {
+      const navAbs = basePath + navHref
+      const navDir = navAbs.replace(/[^\/]+$/, '')
+      const navStr = await zip.file(navAbs)?.async('string')
+      if (navStr) {
+        const doc = new DOMParser().parseFromString(navStr, 'text/html')
+        const nav = doc.querySelector('nav[epub\\:type="toc"], nav[role="doc-toc"], nav#toc, nav')
+        const container = (nav?.querySelector('ol')) || nav
+        if (container) {
+          container.querySelectorAll('li').forEach(li => {
+            const a = li.querySelector('a[href]')
+            if (a) {
+              const href = a.getAttribute('href') || ''
+              const text = (a.textContent || '').replace(/\s+/g, ' ').trim()
+              let frag: string|null = null
+              let fileRef = href
+              if (href.includes('#')) { const sp = href.split('#'); fileRef = sp[0]; frag = sp[1] }
+              const pAbs = EPUBParser.normPath(navDir, fileRef)
+              entries.push({ path: pAbs, frag, title: text })
+            }
+          })
+        }
+      }
+    } else if (ncxHref) {
+      const ncxAbs = basePath + ncxHref
+      const ncxStr = await zip.file(ncxAbs)?.async('string')
+      if (ncxStr) {
+        const doc = new DOMParser().parseFromString(ncxStr, 'application/xml')
+        const navMap = doc.querySelector('navMap') || doc.querySelector('*:not(svg) > navMap')
+        const opfDir = basePath
+        if (navMap) {
+          const collect = (np: Element) => {
+            let text = ''
+            let src = ''
+            np.querySelectorAll(':scope > navLabel text').forEach(t => { if (t.textContent) text = (t.textContent || '').trim() })
+            const content = np.querySelector(':scope > content')
+            if (content) src = content.getAttribute('src') || ''
+            if (src) {
+              let frag: string|null = null
+              let fileRef = src
+              if (src.includes('#')) { const sp = src.split('#'); fileRef = sp[0]; frag = sp[1] }
+              const pAbs = EPUBParser.normPath(opfDir, fileRef)
+              entries.push({ path: pAbs, frag, title: text })
+            }
+            np.querySelectorAll(':scope > navPoint').forEach(child => collect(child))
+          }
+          navMap.querySelectorAll(':scope > navPoint').forEach(np => collect(np))
+        }
+      }
+    }
+    return entries.filter(e => e.path.toLowerCase().endsWith('.xhtml') || e.path.toLowerCase().endsWith('.html'))
+  }
+
+  private static async segmentFileByToc(zip: any, absPath: string, points: { frag: string|null, title: string }[]): Promise<{ title: string, html: string }[]> {
+    const raw = await zip.file(absPath)?.async('string')
+    if (!raw) return []
+    type Pos = { title: string, frag: string|null, pos: number }
+    const positions: Pos[] = []
+    for (const pt of points) {
+      let pos = -1
+      if (pt.frag) {
+        const pats = [
+          new RegExp(`id\\s*=\\s*"${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}"`),
+          new RegExp(`id\\s*=\\s*'${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}'`),
+          new RegExp(`name\\s*=\\s*"${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}"`),
+          new RegExp(`name\\s*=\\s*'${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}'`),
+          new RegExp(`xml:id\\s*=\\s*"${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}"`),
+          new RegExp(`xml:id\\s*=\\s*'${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}'`),
+        ]
+        for (const rg of pats) {
+          const m = raw.match(rg)
+          if (m && m.index !== undefined) {
+            const s = m.index
+            const tagOpen = raw.lastIndexOf('<', s)
+            pos = tagOpen >= 0 ? tagOpen : s
+            break
+          }
+        }
+      }
+      positions.push({ title: pt.title, frag: pt.frag, pos: pos >= 0 ? pos : 0 })
+    }
+    positions.sort((a,b) => a.pos - b.pos)
+    const segments: { title: string, html: string }[] = []
+    for (let i = 0; i < positions.length; i++) {
+      const start = positions[i].pos
+      const end = i+1 < positions.length ? positions[i+1].pos : raw.length
+      const html = raw.slice(start, end)
+      segments.push({ title: positions[i].title, html })
+    }
+    return segments
   }
 }

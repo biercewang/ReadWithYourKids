@@ -14,7 +14,8 @@ const KEY = 'demo_translations'
 export const useTranslationsStore = create<TranslationsState>((set, get) => ({
   translations: [],
   loadTranslation: (bookId: string, paragraphId: string) => {
-    const supa = isSupabaseConfigured && supabase
+    const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
+    const supa = isSupabaseConfigured && supabase && (!(useTranslationsStore as any)._supaDown || cloudOnly)
     if (supa) {
       ;(async () => {
         try {
@@ -33,7 +34,19 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
           }))
           set({ translations: list })
         } catch {
-          set({ translations: [] })
+          if (!cloudOnly) { (useTranslationsStore as any)._supaDown = true }
+          try {
+            const raw = localStorage.getItem(KEY)
+            const map = raw ? JSON.parse(raw) : {}
+            const bookMap = map[bookId] || {}
+            const text: string = bookMap[paragraphId] || ''
+            const t: Translation | null = text && text.length > 0 ? {
+              id: 'local', paragraph_id: paragraphId, translated_text: text, language: 'zh', created_at: new Date().toISOString(),
+            } : null
+            set({ translations: t ? [t] : [] })
+          } catch {
+            set({ translations: [] })
+          }
         }
       })()
       return
@@ -126,4 +139,3 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
     } catch {}
   }
 }))
-

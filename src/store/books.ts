@@ -21,6 +21,10 @@ interface BooksState {
 }
 
 export const useBooksStore = create<BooksState>((set, get) => ({
+  // Supabase runtime down detector to avoid repeated failing requests
+  // Set to true on first failure, subsequent calls will use local fallback
+  // (reset on page reload)
+  
   books: [],
   currentBook: null,
   currentChapter: null,
@@ -29,9 +33,11 @@ export const useBooksStore = create<BooksState>((set, get) => ({
   isLoading: false,
 
   fetchBooks: async (userId: string) => {
+    const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
     try {
       set({ isLoading: true })
-      if (!isSupabaseConfigured || !supabase) {
+      const supaReady = isSupabaseConfigured && !!supabase && (!(useBooksStore as any)._supaDown || cloudOnly)
+      if (!supaReady) {
         const raw = localStorage.getItem('demo_books')
         const demoBooks: Book[] = raw ? JSON.parse(raw) : []
         set({ books: demoBooks, isLoading: false })
@@ -47,7 +53,14 @@ export const useBooksStore = create<BooksState>((set, get) => ({
       set({ books: data || [], isLoading: false })
     } catch (error) {
       console.error('Fetch books error:', error)
-      set({ isLoading: false })
+      if (!cloudOnly) { (useBooksStore as any)._supaDown = true }
+      try {
+        const raw = localStorage.getItem('demo_books')
+        const demoBooks: Book[] = raw ? JSON.parse(raw) : []
+        set({ books: demoBooks, isLoading: false })
+      } catch {
+        set({ isLoading: false })
+      }
     }
   },
 
@@ -154,8 +167,10 @@ export const useBooksStore = create<BooksState>((set, get) => ({
   },
 
   fetchChapters: async (bookId: string) => {
+    const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
     try {
-      if (!isSupabaseConfigured || !supabase) {
+      const supaReady = isSupabaseConfigured && !!supabase && (!(useBooksStore as any)._supaDown || cloudOnly)
+      if (!supaReady) {
         set({ chapters: [] })
         return
       }
@@ -168,12 +183,21 @@ export const useBooksStore = create<BooksState>((set, get) => ({
       set({ chapters: data || [] })
     } catch (error) {
       console.error('Fetch chapters error:', error)
+      if (!cloudOnly) { (useBooksStore as any)._supaDown = true }
+      try {
+        const rawCh = localStorage.getItem('demo_chapters')
+        const mapCh = rawCh ? JSON.parse(rawCh) : {}
+        const chList: Chapter[] = mapCh[bookId] || []
+        set({ chapters: chList })
+      } catch {}
     }
   },
 
   fetchParagraphs: async (chapterId: string) => {
+    const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
     try {
-      if (!isSupabaseConfigured || !supabase) {
+      const supaReady = isSupabaseConfigured && !!supabase && (!(useBooksStore as any)._supaDown || cloudOnly)
+      if (!supaReady) {
         set({ paragraphs: [] })
         return
       }
@@ -187,6 +211,15 @@ export const useBooksStore = create<BooksState>((set, get) => ({
       set({ paragraphs: data || [] })
     } catch (error) {
       console.error('Fetch paragraphs error:', error)
+      if (!cloudOnly) { (useBooksStore as any)._supaDown = true }
+      try {
+        const rawPara = localStorage.getItem('demo_paragraphs')
+        const mapPara = rawPara ? JSON.parse(rawPara) : {}
+        const bookId = get().currentBook?.id || ''
+        const bookMap = (bookId && mapPara[bookId]) || {}
+        const list: Paragraph[] = bookMap[chapterId] || []
+        set({ paragraphs: list })
+      } catch {}
     }
   },
   setParagraphs: (paragraphs: Paragraph[]) => {

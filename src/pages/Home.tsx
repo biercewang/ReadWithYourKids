@@ -62,7 +62,7 @@ export default function Home() {
               .select()
               .single()
             if (bookError) throw bookError
-            const chRows = (parsed.chapters || []).map((c, idx) => ({ book_id: bookData.id, title: c.title || `Chapter ${idx + 1}`, order_index: idx + 1 }))
+            const chRows = (parsed.chapters || []).map((c, idx) => ({ book_id: bookData.id, title: c.title || `(${idx + 1})`, order_index: idx + 1 }))
             const { data: insCh, error: chErr } = await supabase.from('chapters').insert(chRows).select()
             if (chErr) throw chErr
             const allParas = [] as { chapter_id: string; content: string; order_index: number }[]
@@ -110,14 +110,14 @@ export default function Home() {
       const chapter: Chapter = {
         id: newId(),
         book_id: fallbackBook.id,
-        title: (parsed.chapters[0]?.title) || 'Chapter 1',
+        title: (parsed.chapters[0]?.title) || '(1)',
         order_index: 1,
         created_at: new Date().toISOString(),
       }
       const chapterList: Chapter[] = (parsed.chapters || []).map((c, idx) => ({
         id: idx === 0 ? chapter.id : newId(),
         book_id: fallbackBook.id,
-        title: c.title || `Chapter ${idx + 1}`,
+        title: c.title || `(${idx + 1})`,
         order_index: idx + 1,
         created_at: new Date().toISOString(),
       }))
@@ -293,6 +293,15 @@ export default function Home() {
               <h1 className="ml-3 text-2xl font-bold text-gray-900">亲子阅读助手</h1>
             </div>
             <div className="flex items-center space-x-4">
+              <label className="flex items-center space-x-2 text-sm text-gray-700 mr-4">
+                <input
+                  type="checkbox"
+                  defaultChecked={typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'}
+                  onChange={(e)=>{ try { localStorage.setItem('cloud_only', e.target.checked ? '1' : '0') } catch {}; if (user) { fetchBooks(user.id) } }}
+                  className="w-4 h-4 accent-blue-600"
+                />
+                <span>只使用云端</span>
+              </label>
               <span className="text-gray-700">欢迎，{user?.name}</span>
               <button
                 onClick={() => {
@@ -332,26 +341,11 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {books.map((book) => (
-              <div key={book.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="aspect-w-3 aspect-h-4 bg-gray-200">
-                  {book.cover_url ? (
-                    <img
-                      src={book.cover_url}
-                      alt={book.title}
-                      className="w-full h-64 object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-64 flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-100">
-                      <Book className="h-16 w-16 text-blue-600" />
-                    </div>
-                  )}
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{book.title}</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    {book.author || '未知作者'}
-                  </p>
-                  <div className="flex space-x-2">
+              <div key={book.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
+                <div className="p-4 flex flex-col h-full">
+                  <h3 className="font-semibold text-gray-900 mb-2 text-base">{book.title}</h3>
+                  <p className="text-sm text-gray-600">{book.author || '未知作者'}</p>
+                  <div className="flex space-x-2 mt-auto">
                     <button
                       onClick={() => handleStartReading(book)}
                       className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"

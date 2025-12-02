@@ -27,7 +27,8 @@ function dataUrlToBlob(dataUrl: string): Blob {
 export const useImagesStore = create<ImagesState>((set, get) => ({
   images: [],
   loadImages: (bookId: string, paragraphId: string) => {
-    const supa = isSupabaseConfigured && supabase
+    const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
+    const supa = isSupabaseConfigured && supabase && (!(useImagesStore as any)._supaDown || cloudOnly)
     if (supa) {
       ;(async () => {
         try {
@@ -46,7 +47,16 @@ export const useImagesStore = create<ImagesState>((set, get) => ({
           }))
           set({ images: list })
         } catch {
-          set({ images: [] })
+          if (!cloudOnly) { (useImagesStore as any)._supaDown = true }
+          try {
+            const raw = localStorage.getItem(KEY)
+            const map = raw ? JSON.parse(raw) : {}
+            const bookMap = map[bookId] || {}
+            const list: Image[] = bookMap[paragraphId] || []
+            set({ images: list })
+          } catch {
+            set({ images: [] })
+          }
         }
       })()
       return
@@ -63,6 +73,7 @@ export const useImagesStore = create<ImagesState>((set, get) => ({
   },
   addImage: (bookId: string, chapterId: string, paragraphId: string, dataUrl: string, prompt: string) => {
     const supa = isSupabaseConfigured && supabase
+    const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
     if (supa) {
       ;(async () => {
         try {
@@ -105,7 +116,29 @@ export const useImagesStore = create<ImagesState>((set, get) => ({
             created_at: data.created_at,
           }
           set({ images: [img, ...get().images] })
-        } catch {}
+        } catch (e) {
+          if (!cloudOnly) { (useImagesStore as any)._supaDown = true }
+          const img: Image = {
+            id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+            paragraph_id: paragraphId,
+            image_url: dataUrl,
+            prompt,
+            created_at: new Date().toISOString(),
+          }
+          try {
+            const raw = localStorage.getItem(KEY)
+            const map = raw ? JSON.parse(raw) : {}
+            const bookMap = map[bookId] || {}
+            const list: Image[] = bookMap[paragraphId] || []
+            const updated = [img, ...list]
+            bookMap[paragraphId] = updated
+            map[bookId] = bookMap
+            localStorage.setItem(KEY, JSON.stringify(map))
+            set({ images: updated })
+          } catch {
+            set(state => ({ images: [img, ...(state.images || [])] }))
+          }
+        }
       })()
       return
     }
