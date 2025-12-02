@@ -67,19 +67,39 @@ POST /api/books/upload
 
 **生成语音朗读**
 ```
-POST /api/tts/generate
+POST /api/tts
 ```
 
 请求:
 | 参数名 | 参数类型 | 是否必需 | 描述 |
 |-----------|-------------|-------------|-------------|
 | text | string | 是 | 要朗读的文本 |
-| language | string | 否 | 语言代码，默认en |
+| overrides | object | 否 | 覆盖音色与参数，如 `voice_type`、`language`、`rate`、`speed_ratio`、`volume_ratio`、`pitch_ratio`、`encoding` |
 
 响应:
 | 参数名 | 参数类型 | 描述 |
 |-----------|-------------|-------------|
-| audioUrl | string | 语音文件URL |
+| audioUrl | string | 可直接播放的 Data URL |
+| provider | string | 固定 `doubao` |
+
+实现说明:
+- 外部端点：`https://openspeech.bytedance.com/api/v1/tts`
+- 鉴权：请求头 `x-api-key: <你的密钥>`
+- 请求体：包含 `app.cluster`、`user.uid`、`audio.*`、`request.*`；`reqid` 每次唯一；文本超过 UTF-8 1024 字节会被截断；HTTP 模式下 `operation` 为 `query`
+- 环境变量：`VOLC_TTS_TOKEN`、`VOLC_TTS_CLUSTER`
+
+示例 `curl`:
+```
+curl -L -X POST 'https://openspeech.bytedance.com/api/v1/tts' \
+  -H 'x-api-key: <你的密钥>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "app": { "cluster": "volcano_tts" },
+    "user": { "uid": "豆包语音" },
+    "audio": { "voice_type": "BV001", "encoding": "mp3", "speed_ratio": 1.0, "volume_ratio": 1.0, "pitch_ratio": 1.0 },
+    "request": { "reqid": "<uuid>", "text": "示例文本", "operation": "query" }
+  }'
+```
 
 **生成翻译**
 ```

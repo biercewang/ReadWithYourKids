@@ -337,7 +337,7 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
     const isDevWorkersFallback = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
     if (!isDevWorkersFallback) throw new Error(errText || 'TTS 代理失败')
   }
-  if (!volcAppId || !volcToken) throw new Error('未检测到豆包TTS配置，请设置 VITE_VOLC_TTS_APP_ID 和 VITE_VOLC_TTS_TOKEN 或在 localStorage 中设置 volc_tts_app_id/volc_tts_token')
+  if (!volcToken) throw new Error('未检测到豆包TTS配置，请设置 VITE_VOLC_TTS_TOKEN 或在 localStorage 中设置 volc_tts_token')
   const reqid = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
   const containsChinese = /[\u4e00-\u9fa5]/.test(text)
   let reqText = text
@@ -352,8 +352,6 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
   } catch {}
   const body = {
     app: {
-      appid: volcAppId,
-      token: 'access_token',
       cluster: volcCluster,
     },
     user: {
@@ -379,40 +377,42 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
     },
   }
   const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
-  const v3Url = isDev ? '/openspeech/api/v3/tts/unidirectional' : 'https://openspeech.bytedance.com/api/v3/tts/unidirectional'
   const v1Url = isDev ? '/openspeech/api/v1/tts' : 'https://openspeech.bytedance.com/api/v1/tts'
-  const doReqStyle = async (u: string, direct: string, style: 'semicolon'|'plain') => {
+  const doReqStyle = async (u: string, direct: string, style: 'xapikey') => {
+    const buildHeaders = (s: 'semicolon'|'plain'|'xapikey') => {
+      const h: Record<string,string> = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+      if (s === 'xapikey') h['x-api-key'] = volcToken
+      else h['Authorization'] = (s==='semicolon' ? `Bearer; ${volcToken}` : `Bearer ${volcToken}`)
+      return h
+    }
     try {
       const r = await fetch(u, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': (style==='semicolon' ? `Bearer; ${volcToken}` : `Bearer ${volcToken}`) },
+        headers: buildHeaders(style),
         body: JSON.stringify(body),
       })
       return { res: r, source: (u.startsWith('/openspeech') ? 'proxy' : 'direct') as 'proxy'|'direct' }
     } catch (err) {
       const r2 = await fetch(direct, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': (style==='semicolon' ? `Bearer; ${volcToken}` : `Bearer ${volcToken}`) },
+        headers: buildHeaders(style),
         body: JSON.stringify(body),
       })
       return { res: r2, source: 'direct' as const }
     }
   }
-  // 优先 v3 + 分号格式，其次 v3 + 普通格式，最后 v1 + 普通格式
-  let { res, source } = await doReqStyle(v3Url, 'https://openspeech.bytedance.com/api/v3/tts/unidirectional', 'semicolon')
-  if (!res.ok && (res.status===401 || res.status===403 || res.status>=500)) {
-    ;({ res, source } = await doReqStyle(v3Url, 'https://openspeech.bytedance.com/api/v3/tts/unidirectional', 'plain'))
-  }
-  if (!res.ok) {
-    ;({ res, source } = await doReqStyle(v1Url, 'https://openspeech.bytedance.com/api/v1/tts', 'plain'))
-  }
+  let authStyle: 'xapikey' = 'xapikey'
+  let endpoint: 'v1' = 'v1'
+  let { res, source } = await doReqStyle(v1Url, 'https://openspeech.bytedance.com/api/v1/tts', authStyle)
   if (!res.ok) {
     const msg = await res.text()
-    throw new Error(`豆包TTS接口错误: ${res.status} ${msg}`)
+    const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
+    throw new Error(JSON.stringify({ error: 'tts_failed', status: res.status, message: msg, reqid, appid: volcAppId, token_mask: mask(volcToken), cluster: volcCluster, endpoint, auth: authStyle, source }))
   }
   const data = await res.json()
   const base64 = data?.data || ''
   if (!base64 || typeof base64 !== 'string') throw new Error('豆包TTS未返回有效音频数据')
   const audioUrl = `data:audio/${body.audio.encoding};base64,${base64}`
-  return { audioUrl, raw: { ...data, _source: source } }
+  const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
+  return { audioUrl, raw: { ...data, _source: source, _endpoint: endpoint, _auth: authStyle, _appid: volcAppId, _token_mask: mask(volcToken), _cluster: volcCluster, _reqid: reqid } }
 }

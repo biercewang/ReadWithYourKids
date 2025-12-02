@@ -1191,6 +1191,9 @@ export default function Reader() {
                     <button onClick={()=>setShowTtsConfig(!showTtsConfig)} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="参数">
                       <Settings className="h-5 w-5" />
                     </button>
+                    <button onClick={()=>setShowTtsDebug(!showTtsDebug)} className="px-2 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs" title="调试">
+                      调试
+                    </button>
                   </div>
                   {(() => { const ids = getOrderedSelectedIds(); const preview = getCombinedText(ids); return (
                     <div className="mb-2">
@@ -1257,6 +1260,34 @@ export default function Reader() {
                       <span className="block text-red-700">错误：{String(ttsDebug.error)}</span>
                     )}
                   </div>
+                  {showTtsDebug && (
+                    <div className="mt-2 border border-slate-200 rounded-md p-2 text-xs text-slate-700">
+                      {(() => {
+                        let info: any = {}
+                        try {
+                          if (ttsDebug?.error) info = JSON.parse(String(ttsDebug.error))
+                        } catch {}
+                        const appid = info.appid || (import.meta as any)?.env?.VITE_VOLC_TTS_APP_ID || localStorage.getItem('volc_tts_app_id') || ''
+                        const cluster = info.cluster || (import.meta as any)?.env?.VITE_VOLC_TTS_CLUSTER || localStorage.getItem('volc_tts_cluster') || ''
+                        const tokenMask = info.token_mask || (()=>{ const t=(import.meta as any)?.env?.VITE_VOLC_TTS_TOKEN || localStorage.getItem('volc_tts_token') || ''; return t?`${t.slice(0,4)}...${t.slice(-4)} (${t.length})`:'' })()
+                        const endpoint = info.endpoint || (ttsDebug?._endpoint) || ''
+                        const auth = info.auth || (ttsDebug?._auth) || ''
+                        const source = info.source || (ttsDebug?._source) || ''
+                        const reqid = info.reqid || (ttsDebug?._reqid) || ''
+                        return (
+                          <div className="space-y-1">
+                            <div>AppID: {String(appid)}</div>
+                            <div>Token: {String(tokenMask)}</div>
+                            <div>Cluster: {String(cluster)}</div>
+                            <div>Endpoint: {String(endpoint)}</div>
+                            <div>Auth: {String(auth)}</div>
+                            <div>Source: {String(source)}</div>
+                            <div>ReqID: {String(reqid)}</div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

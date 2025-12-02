@@ -47,12 +47,18 @@ export async function onRequest(context: any) {
     }
     const v3 = 'https://openspeech.bytedance.com/api/v3/tts/unidirectional'
     const v1 = 'https://openspeech.bytedance.com/api/v1/tts'
-    const doCall = async (url: string, style: 'semicolon' | 'plain') => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': style==='semicolon' ? `Bearer; ${token}` : `Bearer ${token}` }, body: JSON.stringify(body) })
+    const doCall = async (url: string, style: 'semicolon' | 'plain' | 'xapikey') => {
+      const headers: Record<string,string> = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+      if (style === 'xapikey') headers['x-api-key'] = token
+      else headers['Authorization'] = style==='semicolon' ? `Bearer; ${token}` : `Bearer ${token}`
+      return fetch(url, { method: 'POST', headers, body: JSON.stringify(body) })
+    }
     let res = await doCall(v3, 'semicolon')
-    if (!res.ok) res = await doCall(v1)
+    if (!res.ok) res = await doCall(v1, 'plain')
     if (!res.ok && (res.status===401 || res.status===403)) {
       res = await doCall(v3, 'plain')
       if (!res.ok) res = await doCall(v1, 'plain')
+      if (!res.ok && (res.status===401 || res.status===403)) res = await doCall(v1, 'xapikey')
     }
     if (!res.ok) {
       const msg = await res.text()
