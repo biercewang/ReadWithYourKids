@@ -19,10 +19,12 @@ export default function Home() {
   const [bookToDelete, setBookToDelete] = useState<BookType | null>(null)
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      navigate('/login')
-    } else if (isAuthenticated && user) {
-      fetchBooks(user.id)
+    if (!authLoading) {
+      if (isSupabaseConfigured && !isAuthenticated) {
+        navigate('/login')
+      } else if (user) {
+        fetchBooks(user.id)
+      }
     }
   }, [authLoading, isAuthenticated, user, navigate, fetchBooks])
 
@@ -278,9 +280,7 @@ export default function Home() {
     )
   }
 
-  if (!isAuthenticated) {
-    return null // Will redirect to login
-  }
+  // 未启用 Supabase 或未登录时也可使用本地模式
 
   return (
     <div className="min-h-screen bg-gray-50">
