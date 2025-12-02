@@ -323,21 +323,18 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
   pitch_ratio?: number
   encoding?: 'mp3' | 'wav' | 'pcm' | 'ogg_opus'
 }) {
-  try {
-    const useWorkers = ((import.meta as any)?.env?.VITE_USE_WORKERS === '1') || (typeof localStorage !== 'undefined' && localStorage.getItem('use_workers') === '1')
-    const base = ((import.meta as any)?.env?.VITE_WORKERS_BASE as string) || ''
-    if (useWorkers) {
-      const res = await fetch(`${base}/api/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, overrides }) })
-      if (res.ok) {
-        const data = await res.json()
-        const audioUrl = data?.audioUrl || ''
-        if (audioUrl) return { audioUrl, raw: { provider: 'doubao_workers' } }
-      }
-      // Workers 优先：不再回退直连，直接抛错，让 UI 显示错误便于定位
-      const errText = await res.text().catch(()=> '')
-      throw new Error(errText || 'TTS 代理失败')
+  const useWorkers = ((import.meta as any)?.env?.VITE_USE_WORKERS === '1') || (typeof localStorage !== 'undefined' && localStorage.getItem('use_workers') === '1')
+  const base = ((import.meta as any)?.env?.VITE_WORKERS_BASE as string) || ''
+  if (useWorkers) {
+    const res = await fetch(`${base}/api/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, overrides }) })
+    if (res.ok) {
+      const data = await res.json()
+      const audioUrl = data?.audioUrl || ''
+      if (audioUrl) return { audioUrl, raw: { provider: 'doubao_workers' } }
     }
-  } catch {}
+    const errText = await res.text().catch(()=> '')
+    throw new Error(errText || 'TTS 代理失败')
+  }
   if (!volcAppId || !volcToken) throw new Error('未检测到豆包TTS配置，请设置 VITE_VOLC_TTS_APP_ID 和 VITE_VOLC_TTS_TOKEN 或在 localStorage 中设置 volc_tts_app_id/volc_tts_token')
   const reqid = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
   const containsChinese = /[\u4e00-\u9fa5]/.test(text)
