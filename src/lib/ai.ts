@@ -333,6 +333,9 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
         const audioUrl = data?.audioUrl || ''
         if (audioUrl) return { audioUrl, raw: { provider: 'doubao_workers' } }
       }
+      // Workers 优先：不再回退直连，直接抛错，让 UI 显示错误便于定位
+      const errText = await res.text().catch(()=> '')
+      throw new Error(errText || 'TTS 代理失败')
     }
   } catch {}
   if (!volcAppId || !volcToken) throw new Error('未检测到豆包TTS配置，请设置 VITE_VOLC_TTS_APP_ID 和 VITE_VOLC_TTS_TOKEN 或在 localStorage 中设置 volc_tts_app_id/volc_tts_token')
