@@ -332,8 +332,10 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
       const audioUrl = data?.audioUrl || ''
       if (audioUrl) return { audioUrl, raw: { provider: 'doubao_workers' } }
     }
+    // 在本地开发环境，代理不可用时回退到直连（通过 vite proxy 规避 CORS）
     const errText = await res.text().catch(()=> '')
-    throw new Error(errText || 'TTS 代理失败')
+    const isDevWorkersFallback = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
+    if (!isDevWorkersFallback) throw new Error(errText || 'TTS 代理失败')
   }
   if (!volcAppId || !volcToken) throw new Error('未检测到豆包TTS配置，请设置 VITE_VOLC_TTS_APP_ID 和 VITE_VOLC_TTS_TOKEN 或在 localStorage 中设置 volc_tts_app_id/volc_tts_token')
   const reqid = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -379,42 +381,30 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
   const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
   const v3Url = isDev ? '/openspeech/api/v3/tts/unidirectional' : 'https://openspeech.bytedance.com/api/v3/tts/unidirectional'
   const v1Url = isDev ? '/openspeech/api/v1/tts' : 'https://openspeech.bytedance.com/api/v1/tts'
-  const doReq = async (u: string, direct: string) => {
+  const doReqStyle = async (u: string, direct: string, style: 'semicolon'|'plain') => {
     try {
       const r = await fetch(u, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${volcToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': (style==='semicolon' ? `Bearer; ${volcToken}` : `Bearer ${volcToken}`) },
         body: JSON.stringify(body),
       })
       return { res: r, source: (u.startsWith('/openspeech') ? 'proxy' : 'direct') as 'proxy'|'direct' }
     } catch (err) {
       const r2 = await fetch(direct, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${volcToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': (style==='semicolon' ? `Bearer; ${volcToken}` : `Bearer ${volcToken}`) },
         body: JSON.stringify(body),
       })
       return { res: r2, source: 'direct' as const }
     }
   }
-  let { res, source } = await doReq(v3Url, 'https://openspeech.bytedance.com/api/v3/tts/unidirectional')
-  if (!res.ok && res.status >= 500) {
-    await new Promise(r => setTimeout(r, 500))
-    ;({ res, source } = await doReq(v3Url, 'https://openspeech.bytedance.com/api/v3/tts/unidirectional'))
-  }
-  if (!res.ok && res.status >= 500) {
-    await new Promise(r => setTimeout(r, 1000))
-    ;({ res, source } = await doReq(v3Url, 'https://openspeech.bytedance.com/api/v3/tts/unidirectional'))
+  // 优先 v3 + 分号格式，其次 v3 + 普通格式，最后 v1 + 普通格式
+  let { res, source } = await doReqStyle(v3Url, 'https://openspeech.bytedance.com/api/v3/tts/unidirectional', 'semicolon')
+  if (!res.ok && (res.status===401 || res.status===403 || res.status>=500)) {
+    ;({ res, source } = await doReqStyle(v3Url, 'https://openspeech.bytedance.com/api/v3/tts/unidirectional', 'plain'))
   }
   if (!res.ok) {
-    ;({ res, source } = await doReq(v1Url, 'https://openspeech.bytedance.com/api/v1/tts'))
+    ;({ res, source } = await doReqStyle(v1Url, 'https://openspeech.bytedance.com/api/v1/tts', 'plain'))
   }
   if (!res.ok) {
     const msg = await res.text()
