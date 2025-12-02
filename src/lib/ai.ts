@@ -386,7 +386,7 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': `Bearer; ${volcToken}`,
+          'Authorization': `Bearer ${volcToken}`,
         },
         body: JSON.stringify(body),
       })
@@ -397,7 +397,7 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Authorization': `Bearer; ${volcToken}`,
+          'Authorization': `Bearer ${volcToken}`,
         },
         body: JSON.stringify(body),
       })

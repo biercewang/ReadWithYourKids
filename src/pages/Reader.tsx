@@ -1253,6 +1253,9 @@ export default function Reader() {
                     {!isTtsPending && ttsStatus==='success' && ttsSource==='doubao' && <span>豆包合成成功（音色: {lastTtsModel||ttsVoiceType}）</span>}
                     {!isTtsPending && ttsStatus==='fallback' && ttsSource==='browser' && <span>使用本机朗读</span>}
                     {!isTtsPending && ttsStatus==='error' && <span className="text-red-700">豆包合成失败</span>}
+                    {!isTtsPending && ttsStatus==='error' && ttsDebug?.error && (
+                      <span className="block text-red-700">错误：{String(ttsDebug.error)}</span>
+                    )}
                   </div>
                 </div>
               </div>

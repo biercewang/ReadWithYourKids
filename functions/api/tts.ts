@@ -47,7 +47,7 @@ export async function onRequest(context: any) {
     }
     const v3 = 'https://openspeech.bytedance.com/api/v3/tts/unidirectional'
     const v1 = 'https://openspeech.bytedance.com/api/v1/tts'
-    const doCall = async (url: string) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer; ${token}` }, body: JSON.stringify(body) })
+    const doCall = async (url: string) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(body) })
     let res = await doCall(v3)
     if (!res.ok) res = await doCall(v1)
     if (!res.ok) {
