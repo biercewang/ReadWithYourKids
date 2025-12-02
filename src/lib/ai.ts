@@ -209,6 +209,18 @@ export async function translateAuto(text: string, targetLang: string = 'zh') {
 }
 
 export async function generateImageWithOpenRouter(prompt: string, size: string = '1024x1024') {
+  try {
+    const useWorkers = ((import.meta as any)?.env?.VITE_USE_WORKERS === '1') || (typeof localStorage !== 'undefined' && localStorage.getItem('use_workers') === '1')
+    const base = ((import.meta as any)?.env?.VITE_WORKERS_BASE as string) || ''
+    if (useWorkers) {
+      const res = await fetch(`${base}/api/image`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, size }) })
+      if (res.ok) {
+        const data = await res.json()
+        const url = data?.imageUrl || ''
+        if (url) return url
+      }
+    }
+  } catch {}
   if (!openrouterKey) throw new Error('未检测到OpenRouter密钥，请在.env设置VITE_OPENROUTER_API_KEY，或使用localStorage设置 openrouter_api_key')
   const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
   const url = isDev ? '/openrouter/api/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
@@ -311,6 +323,18 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
   pitch_ratio?: number
   encoding?: 'mp3' | 'wav' | 'pcm' | 'ogg_opus'
 }) {
+  try {
+    const useWorkers = ((import.meta as any)?.env?.VITE_USE_WORKERS === '1') || (typeof localStorage !== 'undefined' && localStorage.getItem('use_workers') === '1')
+    const base = ((import.meta as any)?.env?.VITE_WORKERS_BASE as string) || ''
+    if (useWorkers) {
+      const res = await fetch(`${base}/api/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, overrides }) })
+      if (res.ok) {
+        const data = await res.json()
+        const audioUrl = data?.audioUrl || ''
+        if (audioUrl) return { audioUrl, raw: { provider: 'doubao_workers' } }
+      }
+    }
+  } catch {}
   if (!volcAppId || !volcToken) throw new Error('未检测到豆包TTS配置，请设置 VITE_VOLC_TTS_APP_ID 和 VITE_VOLC_TTS_TOKEN 或在 localStorage 中设置 volc_tts_app_id/volc_tts_token')
   const reqid = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
   const containsChinese = /[\u4e00-\u9fa5]/.test(text)
