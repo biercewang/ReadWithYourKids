@@ -107,7 +107,7 @@ curl -L -X POST 'https://openspeech.bytedance.com/api/v1/tts' \
 
 响应体关键字段：`data` 为 Base64 编码音频数据。前端会转换为 `data:audio/<encoding>;base64,<data>` 并直接播放。
 
-服务端代理（可选）：`POST /api/tts`。请求 JSON：`{ text: string, overrides?: { voice_type, language, rate, speed_ratio, volume_ratio, pitch_ratio, encoding } }`。代理从环境变量读取 `VOLC_TTS_APP_ID`、`VOLC_TTS_TOKEN`、`VOLC_TTS_CLUSTER` 并代发至豆包 TTS，返回 `{ audioUrl, provider: 'doubao' }`。
+服务端代理（可选）：`POST /api/tts`。请求 JSON：`{ text: string, overrides?: { voice_type, language, rate, speed_ratio, volume_ratio, pitch_ratio, encoding } }`。代理从环境变量读取 `VOLC_TTS_TOKEN`、`VOLC_TTS_CLUSTER` 并以 `x-api-key` 代发至豆包 V1 TTS，返回 `{ audioUrl, provider: 'doubao' }`。
 
 更多细节参考官方文档：`https://www.volcengine.com/docs/6561/1257584?lang=zh`
 
