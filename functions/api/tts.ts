@@ -47,9 +47,13 @@ export async function onRequest(context: any) {
     }
     const v3 = 'https://openspeech.bytedance.com/api/v3/tts/unidirectional'
     const v1 = 'https://openspeech.bytedance.com/api/v1/tts'
-    const doCall = async (url: string) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(body) })
-    let res = await doCall(v3)
+    const doCall = async (url: string, style: 'semicolon' | 'plain') => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': style==='semicolon' ? `Bearer; ${token}` : `Bearer ${token}` }, body: JSON.stringify(body) })
+    let res = await doCall(v3, 'semicolon')
     if (!res.ok) res = await doCall(v1)
+    if (!res.ok && (res.status===401 || res.status===403)) {
+      res = await doCall(v3, 'plain')
+      if (!res.ok) res = await doCall(v1, 'plain')
+    }
     if (!res.ok) {
       const msg = await res.text()
       return new Response(JSON.stringify({ error: 'tts_failed', status: res.status, message: msg }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } })
