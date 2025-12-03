@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
               try {
                 const cid = (globalThis.crypto && (globalThis.crypto as any).randomUUID) ? (globalThis.crypto as any).randomUUID() : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`
                 proxyReq.setHeader('X-Api-Connect-Id', cid)
-              } catch {}
+              } catch { }
             })
           }
         },
@@ -52,15 +52,15 @@ export default defineConfig(({ mode }) => {
           ws: true,
           rewrite: (path) => path.replace(/^\/asr/, ''),
           headers: {
-            'apikey': env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || '',
+            'Authorization': `Bearer; ${env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || ''}`,
           },
           configure: (proxy) => {
             proxy.on('proxyReqWs', (proxyReq, req) => {
               try {
-                proxyReq.setHeader('apikey', env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || '')
+                proxyReq.setHeader('Authorization', `Bearer; ${env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || ''}`)
                 const cid = (globalThis.crypto && (globalThis.crypto as any).randomUUID) ? (globalThis.crypto as any).randomUUID() : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`
                 proxyReq.setHeader('X-Api-Connect-Id', cid)
-              } catch {}
+              } catch { }
             })
           }
         },
@@ -82,7 +82,7 @@ export default defineConfig(({ mode }) => {
         clickUrl: 'https://www.trae.ai/solo?showJoin=1',
         autoTheme: true,
         autoThemeTarget: '#root'
-      }), 
+      }),
       tsconfigPaths()
     ],
   }
