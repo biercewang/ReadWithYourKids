@@ -13,7 +13,7 @@ interface BooksState {
   uploadBook: (file: File, userId: string) => Promise<void>
   deleteBook: (bookId: string, userId: string) => Promise<void>
   setCurrentBook: (book: Book) => void
-  setCurrentChapter: (chapter: Chapter) => void
+  setCurrentChapter: (chapter: Chapter | null) => void
   setChapters: (chapters: Chapter[]) => void
   fetchChapters: (bookId: string) => Promise<void>
   fetchParagraphs: (chapterId: string) => Promise<void>
@@ -158,7 +158,7 @@ export const useBooksStore = create<BooksState>((set, get) => ({
     set({ currentBook: book })
   },
 
-  setCurrentChapter: (chapter: Chapter) => {
+  setCurrentChapter: (chapter: Chapter | null) => {
     set({ currentChapter: chapter })
   },
 

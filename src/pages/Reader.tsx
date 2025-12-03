@@ -470,6 +470,9 @@ export default function Reader() {
       }
       try {
         setParagraphs([])
+        useBooksStore.getState().setChapters([])
+        setCurrentChapter(null as any)
+        setCurrentParagraphIndex(0)
         setMergedStart(0)
         setMergedEnd(0)
         setSelectedIds([])
