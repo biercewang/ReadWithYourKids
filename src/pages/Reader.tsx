@@ -84,6 +84,7 @@ export default function Reader() {
   const [showAsrDebug, setShowAsrDebug] = useState(false)
   const asrWsRef = useRef<WebSocket | null>(null)
   const asrSeqRef = useRef<number>(1)
+  const asrReqIdRef = useRef<string>('')
   const asrStreamingRef = useRef<boolean>(false)
   const asrPacketsRef = useRef<number>(0)
   const asrLastPacketSizeRef = useRef<number>(0)
@@ -849,7 +850,7 @@ export default function Reader() {
     const headerSize = 0x1
     header[0] = ((version & 0xF) << 4) | (headerSize & 0xF)
     header[1] = ((msgType & 0xF) << 4) | (flags & 0xF)
-    header[2] = ((serialization & 0xF) << 4) | 0x0
+    header[2] = ((serialization & 0xF) << 4) | 0x1
     header[3] = 0x0
 
     const len = payload.length
@@ -866,12 +867,26 @@ export default function Reader() {
     return buf
   }
 
+  const gzipBytes = async (input: Uint8Array) => {
+    const cs = new CompressionStream('gzip')
+    const blob = new Blob([input])
+    const stream = blob.stream().pipeThrough(cs)
+    const ab = await new Response(stream).arrayBuffer()
+    return new Uint8Array(ab)
+  }
+
+  const constructFrameGzip = async (msgType: number, payload: Uint8Array, serialization: number = 1, flags: number = 0) => {
+    const gz = await gzipBytes(payload)
+    return constructFrame(msgType, gz, serialization, flags)
+  }
+
   const startStreamingAsr = async () => {
     try {
       if (asrStreamingRef.current) return
       const lang = (ttsLanguage && ttsLanguage.length > 0) ? (ttsLanguage === 'cn' ? 'zh-CN' : ttsLanguage) : undefined
       const connectId = crypto.randomUUID ? crypto.randomUUID() : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const reqId = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      asrReqIdRef.current = reqId
       const proto = (typeof location !== 'undefined' && location.protocol === 'https:') ? 'wss' : 'ws'
       const wsUrl = `${proto}://${location.host}/asr/api/v2/asr`
       setAsrDebug((d: any) => ({ ...(d || {}), ws_url: wsUrl }))
@@ -885,7 +900,7 @@ export default function Reader() {
       asrStopClickAtRef.current = null
       setAsrDebug((d: any) => ({ ...(d || {}), ws_url: wsUrl }))
 
-      ws.onopen = () => {
+      ws.onopen = async () => {
         setAsrDebug((d: any) => ({
           ...(d || {}),
           ws_url: wsUrl,
@@ -901,7 +916,7 @@ export default function Reader() {
         const appid2 = env2.VITE_VOLC_ASR_APP_KEY || env2.VITE_VOLC_TTS_APP_ID || ''
         const cluster = env2.VITE_VOLC_ASR_CLUSTER || 'volcengine_streaming_common'
 
-        // Send Full Client Request (Type 1)
+        // Send Full Client Request (binary frame, JSON + gzip)
         const req = {
           app: {
             appid: appid2,
@@ -918,22 +933,22 @@ export default function Reader() {
             result_type: 'full'
           },
           audio: {
-            format: 'raw',
+            format: 'wav',
             codec: 'raw',
             rate: 16000,
             bits: 16,
-            channel: 1
+            channels: 1
           }
         }
         try {
           const jsonBytes = new TextEncoder().encode(JSON.stringify(req))
-          const frame = constructFrame(1, jsonBytes, 1) // Type 1, Serialization 1 (JSON)
+          const frame = await constructFrameGzip(1, jsonBytes, 1, 0)
           ws.send(frame)
           setAsrDebug((d: any) => ({ ...(d || {}), cluster, client_request_len: jsonBytes.length }))
         } catch { }
       }
 
-      ws.onmessage = (ev) => {
+      ws.onmessage = async (ev) => {
         try {
           let payloadBytes: Uint8Array | null = null
 
@@ -942,6 +957,7 @@ export default function Reader() {
             if (buf.length >= 8) {
               const hdrLen = (((buf[0] & 0xF) || 1) * 4) >>> 0
               const msgType = (buf[1] >> 4) & 0xF
+              const compress = (buf[2] & 0xF)
               const sizeIdx = hdrLen
               const sizeVal = (buf[sizeIdx] << 24) | (buf[sizeIdx + 1] << 16) | (buf[sizeIdx + 2] << 8) | buf[sizeIdx + 3]
               const payloadIdx = sizeIdx + 4
@@ -951,7 +967,15 @@ export default function Reader() {
                 if (msgType === 0xF) { // Error
                   setAsrStatus('error')
                   try {
-                    const errJson = JSON.parse(new TextDecoder().decode(payloadBytes))
+                    let p = payloadBytes
+                    if (compress === 0x1) {
+                      const ds = new DecompressionStream('gzip')
+                      const blob = new Blob([p])
+                      const stream = blob.stream().pipeThrough(ds)
+                      const ab = await new Response(stream).arrayBuffer()
+                      p = new Uint8Array(ab)
+                    }
+                    const errJson = JSON.parse(new TextDecoder().decode(p))
                     setAsrDebug((d: any) => ({ ...(d || {}), ws_error_frame: errJson, last_msg_type: msgType, last_payload_len: sizeVal }))
                   } catch { }
                   return
@@ -968,7 +992,15 @@ export default function Reader() {
           }
 
           if (payloadBytes) {
-            const textDecoded = new TextDecoder().decode(payloadBytes)
+            let p = payloadBytes
+            try {
+              const ds = new DecompressionStream('gzip')
+              const blob = new Blob([p])
+              const stream = blob.stream().pipeThrough(ds)
+              const ab = await new Response(stream).arrayBuffer()
+              p = new Uint8Array(ab)
+            } catch {}
+            const textDecoded = new TextDecoder().decode(p)
             const obj = JSON.parse(textDecoded)
             const text = obj?.result?.text || ''
             if (typeof text === 'string' && text.length > 0) setRecordTranscript(text)
@@ -1042,7 +1074,7 @@ export default function Reader() {
       const node = new AudioWorkletNode(ac, 'asr-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 0 })
       src.connect(node)
 
-      node.port.onmessage = (ev: MessageEvent) => {
+      node.port.onmessage = async (ev: MessageEvent) => {
         if (!asrStreamingRef.current || !asrWsRef.current) return
         const samples = new Int16Array(ev.data as ArrayBuffer)
         asrSampleChunksRef.current.push(samples)
@@ -1069,8 +1101,9 @@ export default function Reader() {
             }
             asrSampleTotalRef.current -= ASR_SAMPLES_PER_PACKET
             const bytes = new Uint8Array(out.buffer)
-            const frame = constructFrame(2, bytes, 0)
+            const frame = await constructFrameGzip(2, bytes, 1, 0)
             asrWsRef.current.send(frame)
+            asrSeqRef.current += 1
             asrPacketsRef.current += 1
             asrLastPacketSizeRef.current = bytes.length
             setAsrDebug((d: any) => ({ ...(d || {}), audio_packets_sent: asrPacketsRef.current, last_packet_size: asrLastPacketSizeRef.current }))
@@ -1103,8 +1136,10 @@ export default function Reader() {
               }
               asrSampleTotalRef.current = 0
               const bytes = new Uint8Array(out.buffer)
-              const frameFlush = constructFrame(2, bytes, 0)
-              asrWsRef.current.send(frameFlush)
+              try {
+                const frameFlush = await constructFrameGzip(2, bytes, 1, 0)
+                asrWsRef.current.send(frameFlush)
+              } catch { }
               asrPacketsRef.current += 1
               asrLastPacketSizeRef.current = bytes.length
               setAsrDebug((d: any) => ({ ...(d || {}), audio_packets_sent: asrPacketsRef.current, last_packet_size: asrLastPacketSizeRef.current, final_flush_samples: out.length }))
@@ -1112,8 +1147,8 @@ export default function Reader() {
           } catch { }
           try {
             const empty = new Uint8Array(0)
-            const frame = constructFrame(2, empty, 0, 0x2)
-            asrWsRef.current.send(frame)
+            const finalFrame = await constructFrameGzip(2, empty, 1, 0x2)
+            asrWsRef.current.send(finalFrame)
             setAsrDebug((d: any) => ({ ...(d || {}), final_packet_sent: true }))
           } catch { }
         } else {
