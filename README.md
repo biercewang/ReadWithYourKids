@@ -35,9 +35,12 @@ npm run dev
 使用 `.env` 配置：
 
 - 豆包 TTS（语音合成）：
-  - `VITE_VOLC_TTS_APP_ID`
   - `VITE_VOLC_TTS_TOKEN`
   - 可选：`VITE_VOLC_TTS_VOICE_TYPE`、`VITE_VOLC_TTS_LANGUAGE`、`VITE_VOLC_TTS_CLUSTER`
+- 豆包 ASR（录音文件识别）：
+  - `VITE_VOLC_ASR_APP_KEY`
+  - `VITE_VOLC_ASR_ACCESS_KEY`
+  - 可选：`VITE_VOLC_ASR_RESOURCE_ID`（默认 `volc.bigasr.auc_turbo`）
 - Supabase（可选，云端存储）：
   - `VITE_SUPABASE_URL`
   - `VITE_SUPABASE_ANON_KEY`

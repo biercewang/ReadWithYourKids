@@ -314,6 +314,22 @@ const volcLanguage = (
   'en'
 )
 
+const asrAppKey = (
+  (import.meta as any)?.env?.VITE_VOLC_ASR_APP_KEY as string ||
+  (typeof localStorage !== 'undefined' ? localStorage.getItem('volc_asr_app_key') || '' : '')
+)
+const asrAccessKey = (
+  (import.meta as any)?.env?.VITE_VOLC_ASR_ACCESS_KEY as string ||
+  (typeof localStorage !== 'undefined' ? localStorage.getItem('volc_asr_access_key') || '' : '')
+)
+const asrResourceId = (
+  (import.meta as any)?.env?.VITE_VOLC_ASR_RESOURCE_ID as string ||
+  (typeof localStorage !== 'undefined' ? localStorage.getItem('volc_asr_resource_id') || '' : '') ||
+  'volc.seedasr.auc'
+)
+
+import { supabase, isSupabaseConfigured } from './supabase'
+
 export async function ttsWithDoubaoHttp(text: string, overrides?: {
   voice_type?: string
   language?: string
@@ -407,7 +423,7 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
   if (!res.ok) {
     const msg = await res.text()
     const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
-    throw new Error(JSON.stringify({ error: 'tts_failed', status: res.status, message: msg, reqid, appid: volcAppId, token_mask: mask(volcToken), cluster: volcCluster, endpoint, auth: authStyle, source }))
+    throw new Error(JSON.stringify({ error: 'tts_failed', status: res.status, message: msg, reqid, token_mask: mask(volcToken), cluster: volcCluster, endpoint, auth: authStyle, source }))
   }
   const data = await res.json()
   const base64 = data?.data || ''
@@ -415,4 +431,100 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
   const audioUrl = `data:audio/${body.audio.encoding};base64,${base64}`
   const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
   return { audioUrl, raw: { ...data, _source: source, _endpoint: endpoint, _auth: authStyle, _appid: volcAppId, _token_mask: mask(volcToken), _cluster: volcCluster, _reqid: reqid } }
+}
+
+export async function recognizeWithDoubaoFile(dataUrl: string) {
+  const appKey = asrAppKey || volcAppId || ''
+  const accessKey = asrAccessKey || volcToken || ''
+  if (!appKey) throw new Error('未检测到豆包ASR AppKey，请在 .env 设置 VITE_VOLC_ASR_APP_KEY')
+  if (!accessKey) throw new Error('未检测到豆包ASR AccessKey，请设置 VITE_VOLC_ASR_ACCESS_KEY 或使用 VITE_VOLC_TTS_TOKEN')
+  const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
+  const url = isDev ? '/openspeech/api/v3/auc/bigmodel/recognize/flash' : 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash'
+  const reqid = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  let base64 = ''
+  try {
+    const parts = String(dataUrl || '').split(',')
+    base64 = parts[1] || ''
+  } catch {}
+  if (!base64) throw new Error('未获取到录音数据')
+  const body = {
+    user: { uid: appKey },
+    audio: { data: base64 },
+    request: { model_name: 'bigmodel' }
+  }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-Api-App-Key': appKey,
+      'X-Api-Access-Key': accessKey,
+      'X-Api-Resource-Id': 'volc.bigasr.auc_turbo',
+      'X-Api-Request-Id': reqid,
+      'X-Api-Sequence': '-1'
+    },
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) throw new Error(`ASR接口错误: ${res.status} ${await res.text()}`)
+  const data = await res.json()
+  const text = data?.result?.text || ''
+  const appKeySource = asrAppKey ? 'asr_app_key' : (volcAppId ? 'tts_app_id' : 'none')
+  const accessKeySource = asrAccessKey ? 'asr_access_key' : 'tts_token'
+  if (typeof text === 'string' && text.length > 0) return { text, raw: { _endpoint: 'flash', _reqid: reqid, _resource: asrResourceId, _app_key_source: appKeySource, _access_key_source: accessKeySource } }
+  const utt = (data?.result?.utterances || []).map((u: any) => u?.text || '').filter((s: string) => s).join('\n')
+  return { text: utt || '', raw: { _endpoint: 'flash', _reqid: reqid, _resource: 'volc.bigasr.auc_turbo', _app_key_source: appKeySource, _access_key_source: accessKeySource } }
+}
+
+export async function recognizeWithDoubaoFileStandard(dataUrl: string, language?: string) {
+  const appKey = asrAppKey || volcAppId || ''
+  const accessKey = asrAccessKey || volcToken || ''
+  if (!appKey) throw new Error('未检测到豆包ASR AppKey，请在 .env 设置 VITE_VOLC_ASR_APP_KEY 或 VITE_VOLC_TTS_APP_ID')
+  if (!accessKey) throw new Error('未检测到豆包ASR AccessKey，请设置 VITE_VOLC_ASR_ACCESS_KEY 或使用 VITE_VOLC_TTS_TOKEN')
+  const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
+  const submitUrl = isDev ? '/openspeech/api/v3/auc/bigmodel/submit' : 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit'
+  const queryUrl = isDev ? '/openspeech/api/v3/auc/bigmodel/query' : 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/query'
+  const reqid = typeof crypto !== 'undefined' && (crypto as any).randomUUID ? (crypto as any).randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  let publicUrl = ''
+  try {
+    const blob = await fetch(dataUrl).then(r => r.blob())
+    if (blob && isSupabaseConfigured && supabase) {
+      const path = `asr/${reqid}.ogg`
+      const { data: up } = await supabase.storage.from('generated').upload(path, blob, { upsert: true })
+      const { data: pub } = await supabase.storage.from('generated').getPublicUrl(up?.path || path)
+      publicUrl = pub?.publicUrl || ''
+    }
+  } catch {}
+  if (!publicUrl) throw new Error('未获取到可访问的音频URL，请配置 Supabase 或提供公网URL')
+  const submitBody = {
+    user: { uid: appKey },
+    audio: { url: publicUrl, format: 'ogg', codec: 'opus', ...(language ? { language } : {}) },
+    request: { model_name: 'bigmodel' }
+  }
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'X-Api-App-Key': appKey,
+    'X-Api-Access-Key': accessKey,
+    'X-Api-Resource-Id': asrResourceId,
+    'X-Api-Request-Id': reqid,
+    'X-Api-Sequence': '-1'
+  }
+  const sRes = await fetch(submitUrl, { method: 'POST', headers, body: JSON.stringify(submitBody) })
+  if (!sRes.ok) throw new Error(`ASR提交错误: ${sRes.status} ${await sRes.text()}`)
+  const sData = await sRes.json()
+  const taskId = sData?.request_id || sData?.task_id || sData?.header?.reqid || reqid
+  const qBody = { request_id: taskId }
+  let tries = 0
+  while (tries < 10) {
+    const qRes = await fetch(queryUrl, { method: 'POST', headers, body: JSON.stringify(qBody) })
+    if (!qRes.ok) throw new Error(`ASR查询错误: ${qRes.status} ${await qRes.text()}`)
+    const qData = await qRes.json()
+    const text = qData?.result?.text || ''
+    if (typeof text === 'string' && text.length > 0) return { text, raw: { _endpoint: 'standard', _reqid: reqid, _task: taskId, _resource: asrResourceId, _url: publicUrl } }
+    const utt = (qData?.result?.utterances || []).map((u: any) => u?.text || '').filter((s: string) => s).join('\n')
+    if ((utt || '').length > 0) return { text: utt, raw: { _endpoint: 'standard', _reqid: reqid, _task: taskId, _resource: asrResourceId, _url: publicUrl } }
+    tries++
+    await new Promise(r => setTimeout(r, 1000))
+  }
+  return { text: '', raw: { _endpoint: 'standard', _reqid: reqid, _task: taskId, _resource: asrResourceId, _url: publicUrl } }
 }

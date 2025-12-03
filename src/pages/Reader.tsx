@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
 import { useBooksStore } from '../store/books'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
-import { translateAuto, translateStreamAuto, translateWithOpenRouter, translateWithOpenRouterStream, translateWithGemini, translateWithGeminiStream, generateImageWithOpenRouter, ttsWithDoubaoHttp } from '../lib/ai'
+import { translateAuto, translateStreamAuto, translateWithOpenRouter, translateWithOpenRouterStream, translateWithGemini, translateWithGeminiStream, generateImageWithOpenRouter, ttsWithDoubaoHttp, recognizeWithDoubaoFileStandard, recognizeWithDoubaoFile } from '../lib/ai'
 import { useImagesStore } from '../store/images'
 import { useAudiosStore } from '../store/audios'
 import { Volume2, Languages, Image, MessageSquare, BookOpen, ArrowLeft, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, MoreVertical, Info, Play, Square, Settings, RefreshCw, Brush } from 'lucide-react'
@@ -67,6 +67,24 @@ export default function Reader() {
   const { notes, currentRole, loadNotes, loadNotesSmart, addNote, deleteNote, setRole } = useNotesStore()
   const { translations, loadTranslation, addTranslation } = useTranslationsStore()
   const [noteInput, setNoteInput] = useState('')
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordTranscript, setRecordTranscript] = useState('')
+  const [isSavingRecording, setIsSavingRecording] = useState(false)
+  const recChunksRef = useRef<Blob[]>([])
+  const recMediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recStreamRef = useRef<MediaStream | null>(null)
+  const recRecognitionRef = useRef<any>(null)
+  const recAudioCtxRef = useRef<AudioContext | null>(null)
+  const recAnalyserRef = useRef<AnalyserNode | null>(null)
+  const recAudioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
+  const recRafRef = useRef<number | null>(null)
+  const recCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [asrStatus, setAsrStatus] = useState<'idle'|'saving'|'recognizing'|'success'|'error'>('idle')
+  const [asrDebug, setAsrDebug] = useState<any>(null)
+  const [showAsrDebug, setShowAsrDebug] = useState(false)
+  const asrWsRef = useRef<WebSocket | null>(null)
+  const asrSeqRef = useRef<number>(1)
+  const asrStreamingRef = useRef<boolean>(false)
 
   const [mergedStart, setMergedStart] = useState<number>(0)
   const [mergedEnd, setMergedEnd] = useState<number>(0)
@@ -134,6 +152,11 @@ export default function Reader() {
     'en_female_skye_emo_v2_mars_bigtts',
     'en_male_glen_emo_v2_mars_bigtts'
   ]
+
+  useEffect(() => {
+    try { localStorage.setItem('volc_tts_voice_type', ttsVoiceType) } catch {}
+    setShowVoiceCustom(!VOICE_OPTIONS.includes(ttsVoiceType))
+  }, [ttsVoiceType])
 
   const getCurrentParagraphId = () => {
     const p = paragraphs[currentParagraphIndex]
@@ -725,6 +748,314 @@ export default function Reader() {
     }
   }
 
+  const startRecording = async () => {
+    try {
+      if (isRecording) return
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      recStreamRef.current = stream
+      let mime = 'audio/ogg;codecs=opus'
+      if (typeof MediaRecorder !== 'undefined' && !MediaRecorder.isTypeSupported(mime)) {
+        mime = 'audio/webm;codecs=opus'
+      }
+      const mr = (typeof MediaRecorder !== 'undefined' && (MediaRecorder as any).isTypeSupported && (MediaRecorder as any).isTypeSupported(mime))
+        ? new MediaRecorder(stream, { mimeType: mime })
+        : new MediaRecorder(stream)
+      recMediaRecorderRef.current = mr
+      recChunksRef.current = []
+      mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) recChunksRef.current.push(e.data) }
+      mr.start(200)
+      setIsRecording(true)
+      try { setAsrDebug((d:any)=>({ ...(d||{}), record_mime: mime })) } catch {}
+      try {
+        const AC = (window as any).AudioContext || (window as any).webkitAudioContext
+        if (AC) {
+          const ac = new AC()
+          recAudioCtxRef.current = ac
+          const src = ac.createMediaStreamSource(stream)
+          recAudioSourceRef.current = src
+          const an = ac.createAnalyser()
+          recAnalyserRef.current = an
+          an.fftSize = 2048
+          src.connect(an)
+          const ensureCanvasSize = () => {
+            const c = recCanvasRef.current
+            if (!c) return
+            const dpr = (window.devicePixelRatio || 1)
+            const w = c.clientWidth || 300
+            const h = c.clientHeight || 64
+            c.width = Math.max(1, Math.floor(w * dpr))
+            c.height = Math.max(1, Math.floor(h * dpr))
+          }
+          const draw = () => {
+            const a = recAnalyserRef.current
+            const c = recCanvasRef.current
+            if (!a || !c) { recRafRef.current = requestAnimationFrame(draw); return }
+            const ctx2d = c.getContext('2d')
+            if (!ctx2d) { recRafRef.current = requestAnimationFrame(draw); return }
+            const len = a.fftSize
+            const data = new Uint8Array(len)
+            a.getByteTimeDomainData(data)
+            ctx2d.clearRect(0, 0, c.width, c.height)
+            ctx2d.strokeStyle = '#2563eb'
+            ctx2d.lineWidth = 2
+            ctx2d.beginPath()
+            const sliceW = c.width / len
+            let x = 0
+            for (let i = 0; i < len; i++) {
+              const v = data[i] / 128.0
+              const y = (v * c.height) / 2
+              if (i === 0) ctx2d.moveTo(x, y)
+              else ctx2d.lineTo(x, y)
+              x += sliceW
+            }
+            ctx2d.lineTo(c.width, c.height / 2)
+            ctx2d.stroke()
+            recRafRef.current = requestAnimationFrame(draw)
+          }
+          ensureCanvasSize()
+          draw()
+        }
+      } catch {}
+      try {
+        const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+        if (SR) {
+          const recog = new SR()
+          recRecognitionRef.current = recog
+          recog.lang = (ttsLanguage && ttsLanguage.length>0) ? (ttsLanguage==='cn'?'zh-CN':ttsLanguage) : 'zh-CN'
+          recog.interimResults = true
+          recog.continuous = true
+          recog.onresult = (evt: any) => {
+            let text = ''
+            for (let i = evt.resultIndex; i < evt.results.length; i++) {
+              const res = evt.results[i]
+              text += res[0].transcript
+            }
+            setRecordTranscript(text)
+          }
+          try { recog.start() } catch {}
+        }
+      } catch {}
+    } catch {}
+  }
+
+  const startStreamingAsr = async () => {
+    try {
+      if (asrStreamingRef.current) return
+      const lang = (ttsLanguage && ttsLanguage.length>0) ? (ttsLanguage==='cn'?'zh-CN':ttsLanguage) : undefined
+      const connectId = crypto.randomUUID ? crypto.randomUUID() : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const proto = (typeof location !== 'undefined' && location.protocol === 'https:') ? 'wss' : 'ws'
+      const wsUrl = `${proto}://${location.host}/asr/api/v2/asr`
+      const ws = new WebSocket(wsUrl)
+      asrWsRef.current = ws
+      asrStreamingRef.current = true
+      ws.binaryType = 'arraybuffer'
+      ws.onopen = () => {
+        setAsrDebug((d:any)=>({ ...(d||{}), ws_url: wsUrl }))
+        setAsrStatus('recognizing')
+        const req = { user: { uid: connectId }, request: { model_name: 'bigmodel', language: lang || 'zh-CN', rate: 16000, bits: 16, channel: 1, format: 'raw' } }
+        try { ws.send(JSON.stringify(req)) } catch {}
+      }
+      ws.onmessage = (ev) => {
+        try {
+          if (typeof ev.data === 'string') {
+            const obj = JSON.parse(ev.data as string)
+            const text = obj?.result?.text || ''
+            if (typeof text === 'string' && text.length>0) setRecordTranscript(text)
+            const utts = (obj?.result?.utterances||[]).map((u:any)=>u?.text||'').filter((s:string)=>s).join('\n')
+            if (utts && utts.length>0) setRecordTranscript(utts)
+          }
+        } catch {}
+      }
+      ws.onerror = (e) => { setAsrStatus('error'); setAsrDebug((d:any)=>({ ...(d||{}), ws_error: String(e) })) }
+      ws.onclose = (ev) => {
+        asrStreamingRef.current = false
+        if (ev.code !== 1000) {
+          setAsrStatus('error')
+          setAsrDebug((d:any)=>({ ...(d||{}), ws_close: { code: ev.code, reason: ev.reason } }))
+        } else {
+          setAsrStatus('idle')
+        }
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      recStreamRef.current = stream
+      const ac = new ((window as any).AudioContext || (window as any).webkitAudioContext)()
+      recAudioCtxRef.current = ac
+      const src = ac.createMediaStreamSource(stream)
+      const an = ac.createAnalyser()
+      recAnalyserRef.current = an
+      an.fftSize = 2048
+      src.connect(an)
+      const ensureCanvasSize = () => {
+        const c = recCanvasRef.current
+        if (!c) return
+        const dpr = (window.devicePixelRatio || 1)
+        const w = c.clientWidth || 300
+        const h = c.clientHeight || 64
+        c.width = Math.max(1, Math.floor(w * dpr))
+        c.height = Math.max(1, Math.floor(h * dpr))
+      }
+      const draw = () => {
+        const a = recAnalyserRef.current
+        const c = recCanvasRef.current
+        if (!a || !c) { recRafRef.current = requestAnimationFrame(draw); return }
+        const ctx2d = c.getContext('2d')
+        if (!ctx2d) { recRafRef.current = requestAnimationFrame(draw); return }
+        const len = a.fftSize
+        const data = new Uint8Array(len)
+        a.getByteTimeDomainData(data)
+        ctx2d.clearRect(0, 0, c.width, c.height)
+        ctx2d.strokeStyle = '#2563eb'
+        ctx2d.lineWidth = 2
+        ctx2d.beginPath()
+        const sliceW = c.width / len
+        let x = 0
+        for (let i = 0; i < len; i++) {
+          const v = data[i] / 128.0
+          const y = (v * c.height) / 2
+          if (i === 0) ctx2d.moveTo(x, y)
+          else ctx2d.lineTo(x, y)
+          x += sliceW
+        }
+        ctx2d.lineTo(c.width, c.height / 2)
+        ctx2d.stroke()
+        recRafRef.current = requestAnimationFrame(draw)
+      }
+      ensureCanvasSize()
+      draw()
+      await ac.audioWorklet.addModule(new URL('../lib/asrWorklet.js', import.meta.url))
+      const node = new AudioWorkletNode(ac, 'asr-pcm-processor', { numberOfInputs: 1, numberOfOutputs: 0 })
+      src.connect(node)
+      node.port.onmessage = (ev: MessageEvent) => {
+        if (!asrStreamingRef.current || !asrWsRef.current) return
+        const bytes = new Uint8Array(ev.data as ArrayBuffer)
+        const header = new Uint8Array(4)
+        header[0] = (0x1 << 4) | 0x1
+        header[1] = (0x2 << 4) | 0x0 // audio-only, not last
+        header[2] = (0x0 << 4) | 0x0
+        header[3] = 0x00
+        const size = new Uint8Array(4)
+        const len = bytes.length
+        size[0] = (len >>> 24) & 0xff
+        size[1] = (len >>> 16) & 0xff
+        size[2] = (len >>> 8) & 0xff
+        size[3] = (len) & 0xff
+        const buf = new Uint8Array(4 + 4 + len)
+        buf.set(header, 0)
+        buf.set(size, 4)
+        buf.set(bytes, 8)
+        try { asrWsRef.current.send(buf) } catch {}
+      }
+      setIsRecording(true)
+    } catch {}
+  }
+
+  const stopStreamingAsr = async () => {
+    try {
+      asrStreamingRef.current = false
+      try { (recStreamRef.current?.getTracks()||[]).forEach(t=>t.stop()) } catch {}
+      try { recAudioCtxRef.current?.close() } catch {}
+      try {
+        // send last packet (flags 0b0010)
+        if (asrWsRef.current) {
+          const header = new Uint8Array(4)
+          header[0] = (0x1 << 4) | 0x1
+          header[1] = (0x2 << 4) | 0x2
+          header[2] = (0x0 << 4) | 0x0
+          header[3] = 0x00
+          const size = new Uint8Array(4)
+          size[0] = 0; size[1] = 0; size[2] = 0; size[3] = 0
+          const buf = new Uint8Array(4 + 4)
+          buf.set(header, 0)
+          buf.set(size, 4)
+          try { asrWsRef.current.send(buf) } catch {}
+        }
+      } catch {}
+      try { asrWsRef.current?.close() } catch {}
+      asrWsRef.current = null
+      setIsRecording(false)
+    } catch {}
+  }
+
+  const stopRecording = async () => {
+    try {
+      if (!isRecording) return
+      setIsRecording(false)
+      try { recMediaRecorderRef.current?.stop() } catch {}
+      try { (recStreamRef.current?.getTracks() || []).forEach(t => t.stop()) } catch {}
+      recMediaRecorderRef.current = null
+      recStreamRef.current = null
+      try { recRecognitionRef.current && recRecognitionRef.current.stop && recRecognitionRef.current.stop() } catch {}
+      try { if (recRafRef.current) { cancelAnimationFrame(recRafRef.current); recRafRef.current = null } } catch {}
+      try {
+        if (recAudioSourceRef.current) { recAudioSourceRef.current.disconnect() }
+        recAudioSourceRef.current = null
+        if (recAnalyserRef.current) { recAnalyserRef.current.disconnect() }
+        recAnalyserRef.current = null
+        if (recAudioCtxRef.current) { recAudioCtxRef.current.close(); recAudioCtxRef.current = null }
+      } catch {}
+    } catch {}
+  }
+
+  const saveRecordingAsNote = async () => {
+    try {
+      if (isSavingRecording) return
+      setIsSavingRecording(true)
+      setAsrStatus('saving')
+      if (isRecording) {
+        await stopRecording()
+        await new Promise(r => setTimeout(r, 250))
+      }
+      const bid = getBookKey()
+      const pid = getCurrentParagraphId()
+      if (recChunksRef.current.length > 0) {
+        const blob = new Blob(recChunksRef.current, { type: 'audio/webm' })
+        const reader = new FileReader()
+        reader.onloadend = async () => {
+          const dataUrl = String(reader.result || '')
+          if (dataUrl) {
+            try { setAsrDebug((d:any)=>({ ...(d||{}), dataUrl_len: dataUrl.length })) } catch {}
+            addAudio(bid, currentChapter?.id || '', pid, dataUrl, 'record', undefined)
+            ensureMergedData(mergedStart, mergedEnd)
+            try { const audio = new Audio(dataUrl); audio.play() } catch {}
+            try {
+              setAsrStatus('recognizing')
+              const lang = (ttsLanguage && ttsLanguage.length>0) ? (ttsLanguage==='cn'?'zh-CN':ttsLanguage) : undefined
+              let res: any
+              try {
+                res = await recognizeWithDoubaoFileStandard(dataUrl, lang)
+              } catch (e) {
+                res = await recognizeWithDoubaoFile(dataUrl)
+              }
+              const recognized = res?.text || ''
+              setAsrDebug((d:any)=>({ ...(d||{}), response: res?.raw }))
+              if (recognized && recognized.trim().length > 0) {
+                setRecordTranscript(recognized)
+                if (currentBook && currentChapter) {
+                  addNote(bid, currentChapter.id, pid, recognized.trim())
+                  ensureMergedData(mergedStart, mergedEnd)
+                }
+                setAsrStatus('success')
+              }
+            } catch (e:any) {
+              setAsrStatus('error')
+              setAsrDebug((d:any)=>({ ...(d||{}), error: e?.message || String(e) }))
+            }
+          }
+        }
+        reader.readAsDataURL(blob)
+      }
+      const content = recordTranscript || ''
+      if (content.trim().length > 0 && currentBook && currentChapter) {
+        addNote(bid, currentChapter.id, pid, content.trim())
+        ensureMergedData(mergedStart, mergedEnd)
+      }
+      setRecordTranscript('')
+      recChunksRef.current = []
+      setIsSavingRecording(false)
+      if (asrStatus === 'saving') setAsrStatus('idle')
+    } catch {}
+  }
+
   const handlePreviousParagraph = () => {
     if (mergedEnd > mergedStart) {
       const win = mergedEnd - mergedStart + 1
@@ -1191,9 +1522,6 @@ export default function Reader() {
                     <button onClick={()=>setShowTtsConfig(!showTtsConfig)} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="参数">
                       <Settings className="h-5 w-5" />
                     </button>
-                    <button onClick={()=>setShowTtsDebug(!showTtsDebug)} className="px-2 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs" title="调试">
-                      调试
-                    </button>
                   </div>
                   {(() => { const ids = getOrderedSelectedIds(); const preview = getCombinedText(ids); return (
                     <div className="mb-2">
@@ -1260,34 +1588,6 @@ export default function Reader() {
                       <span className="block text-red-700">错误：{String(ttsDebug.error)}</span>
                     )}
                   </div>
-                  {showTtsDebug && (
-                    <div className="mt-2 border border-slate-200 rounded-md p-2 text-xs text-slate-700">
-                      {(() => {
-                        let info: any = {}
-                        try {
-                          if (ttsDebug?.error) info = JSON.parse(String(ttsDebug.error))
-                        } catch {}
-                        const appid = info.appid || (import.meta as any)?.env?.VITE_VOLC_TTS_APP_ID || localStorage.getItem('volc_tts_app_id') || ''
-                        const cluster = info.cluster || (import.meta as any)?.env?.VITE_VOLC_TTS_CLUSTER || localStorage.getItem('volc_tts_cluster') || ''
-                        const tokenMask = info.token_mask || (()=>{ const t=(import.meta as any)?.env?.VITE_VOLC_TTS_TOKEN || localStorage.getItem('volc_tts_token') || ''; return t?`${t.slice(0,4)}...${t.slice(-4)} (${t.length})`:'' })()
-                        const endpoint = info.endpoint || (ttsDebug?._endpoint) || ''
-                        const auth = info.auth || (ttsDebug?._auth) || ''
-                        const source = info.source || (ttsDebug?._source) || ''
-                        const reqid = info.reqid || (ttsDebug?._reqid) || ''
-                        return (
-                          <div className="space-y-1">
-                            <div>AppID: {String(appid)}</div>
-                            <div>Token: {String(tokenMask)}</div>
-                            <div>Cluster: {String(cluster)}</div>
-                            <div>Endpoint: {String(endpoint)}</div>
-                            <div>Auth: {String(auth)}</div>
-                            <div>Source: {String(source)}</div>
-                            <div>ReqID: {String(reqid)}</div>
-                          </div>
-                        )
-                      })()}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -1444,6 +1744,29 @@ export default function Reader() {
             {showDiscussion && (
               <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 relative">
                 <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <button onClick={startStreamingAsr} disabled={isRecording} className={`px-3 py-2 rounded-md text-sm ${isRecording?'bg-slate-200 text-slate-500':'bg-indigo-600 text-white hover:bg-indigo-700'}`}>流式识别</button>
+                    <button onClick={stopStreamingAsr} disabled={!isRecording} className={`px-3 py-2 rounded-md text-sm ${!isRecording?'bg-slate-200 text-slate-500':'bg-indigo-100 text-indigo-800 hover:bg-indigo-200'}`}>结束流式</button>
+                    <button onClick={()=>setShowAsrDebug(!showAsrDebug)} className="px-2 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs">调试</button>
+                  </div>
+                  <div className="text-xs text-slate-700 mt-2">
+                    {isRecording ? '流式识别中...' : '未连接'}
+                    {asrStatus==='error' && <span className="text-red-700">（发生错误）</span>}
+                  </div>
+                  <div className="border border-slate-300 rounded-md bg-white h-16 overflow-hidden">
+                    <canvas ref={recCanvasRef} className="w-full h-16" />
+                  </div>
+                  <div className="border border-slate-200 rounded-md p-2 bg-white text-sm text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
+                    {recordTranscript && recordTranscript.length>0 ? recordTranscript : <span className="text-slate-400">录音识别内容将显示在此</span>}
+                  </div>
+                  {showAsrDebug && (
+                    <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-700">
+                      <div>状态：{asrStatus}</div>
+                      <div>音频DataURL长度：{String(asrDebug?.dataUrl_len||'')}</div>
+                      <div>识别返回：{asrDebug?.response ? JSON.stringify(asrDebug.response) : '无'}</div>
+                      {asrDebug?.error && <div className="text-red-700">错误：{String(asrDebug.error)}</div>}
+                    </div>
+                  )}
                   <textarea value={noteInput} onChange={(e)=>setNoteInput(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="记录交流内容" />
                   <div className="flex space-x-2">
                     <button onClick={() => setRole('parent')} className={`flex-1 px-3 py-2 rounded-md text-sm ${currentRole==='parent'?'bg-blue-600 text-white':'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>家长</button>
