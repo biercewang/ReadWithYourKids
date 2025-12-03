@@ -8,7 +8,7 @@ interface AuthState {
   isAuthenticated: boolean
   isLoading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, name: string) => Promise<void>
+  signUp: (email: string, password: string, name: string, inviteCode: string) => Promise<void>
   signOut: () => Promise<void>
   checkAuth: () => Promise<void>
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
@@ -99,8 +99,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  signUp: async (email: string, password: string, name: string) => {
+  signUp: async (email: string, password: string, name: string, inviteCode: string) => {
     try {
+      const inviteExpected = ((import.meta as any).env?.VITE_INVITE_CODE as string) || ''
+      if (inviteExpected && (inviteCode || '').trim() !== inviteExpected) {
+        throw new Error('邀请码错误')
+      }
       if (!isSupabaseConfigured || !supabase) {
         const demoUser = {
           id: crypto.randomUUID(),
@@ -116,11 +120,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: { data: { invited: true, invite_code: inviteExpected || (inviteCode || '').trim() } }
       })
       
       if (error) throw error
       
       if (data.user) {
+        const metaInvited = (data.user as any)?.user_metadata?.invited === true
+        if (!metaInvited) {
+          throw new Error('未通过邀请码注册')
+        }
         const { data: userData, error: insertError } = await supabase
           .from('users')
           .insert([

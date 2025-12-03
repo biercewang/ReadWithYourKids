@@ -7,6 +7,7 @@ export default function Register() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   
@@ -19,10 +20,19 @@ export default function Register() {
     setError('')
     
     try {
-      await signUp(email, password, name)
+      const inviteExpected = ((import.meta as any).env?.VITE_INVITE_CODE as string) || ''
+      if (inviteExpected && inviteCode.trim() !== inviteExpected) {
+        throw new Error('邀请码错误')
+      }
+      await signUp(email, password, name, inviteCode)
       navigate('/')
     } catch (err) {
-      setError('注册失败，请重试')
+      const m = (err as any)?.message || ''
+      if (m && /邀请码/.test(m)) {
+        setError('邀请码错误')
+      } else {
+        setError('注册失败，请重试')
+      }
       console.error('Register error:', err)
     } finally {
       setIsLoading(false)
@@ -57,6 +67,24 @@ export default function Register() {
                   placeholder="您的姓名"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="invite" className="sr-only">邀请码</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="invite"
+                  name="invite"
+                  type="text"
+                  required
+                  className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  placeholder="请输入邀请码"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
                 />
               </div>
             </div>
