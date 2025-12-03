@@ -566,11 +566,12 @@ export default function Reader() {
   const handleTextToSpeech = async () => {
     if (paragraphs.length === 0) return
     const ids = getOrderedSelectedIds()
-    const targetId = ids[ids.length - 1]
+    const targetId = ids[0]
     const text = getCombinedText(ids)
     try {
       setIsTtsPending(true)
       setShowTtsDebug(false)
+      stopPlaying()
       const { audioUrl, raw } = await ttsWithDoubaoHttp(text, {
         voice_type: ttsVoiceType,
         language: ttsLanguage || undefined,
@@ -581,17 +582,19 @@ export default function Reader() {
       })
       const audio = new Audio(audioUrl)
       audio.onplay = () => setIsPlaying(true)
-      audio.onended = () => setIsPlaying(false)
+      audio.onended = () => { try { setCurrentAudio(null); setIsPlaying(false) } catch { } }
       setTtsStatus('success')
       setTtsSource('doubao')
       setTtsDebug(raw)
       setLastTtsModel((raw as any)?._voice_type || ttsVoiceType)
       setIsTtsPending(false)
+      setCurrentAudio(audio)
       await audio.play()
     } catch (e) {
       setIsTtsPending(false)
       setTtsDebug({ error: e instanceof Error ? e.message : String(e) })
       if ('speechSynthesis' in window) {
+        stopPlaying()
         const utterance = new SpeechSynthesisUtterance(paragraphs[currentParagraphIndex]?.content || '')
         utterance.lang = 'en-US'
         utterance.rate = 0.8
@@ -652,6 +655,21 @@ export default function Reader() {
     }
   }
 
+  const stopPlaying = () => {
+    try {
+      if (currentAudio) {
+        try { currentAudio.pause(); currentAudio.currentTime = 0 } catch { }
+        setCurrentAudio(null)
+        setIsPlaying(false)
+      }
+    } catch { }
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        speechSynthesis.cancel()
+      }
+    } catch { }
+  }
+
   const handleVoiceMenuClick = async () => {
     const next = !showVoicePanel
     setShowVoicePanel(next)
@@ -659,6 +677,7 @@ export default function Reader() {
       setShowTranslation(false)
       setShowImagePanel(false)
       setShowDiscussion(false)
+      stopPlaying()
       await handleTextToSpeech()
     }
   }
@@ -668,7 +687,7 @@ export default function Reader() {
     try {
       const bid = getBookKey()
       const ids = getOrderedSelectedIds()
-      const targetId = ids[ids.length - 1]
+      const targetId = ids[0]
       const text = getCombinedText(ids)
       setIsTranslating(true)
       const full = translationProvider === 'openrouter'
@@ -731,7 +750,7 @@ export default function Reader() {
       setImageDebug(null)
       const bid = getBookKey()
       const ids = getOrderedSelectedIds()
-      const targetId = ids[ids.length - 1]
+      const targetId = ids[0]
       const text = getCombinedText(ids)
       const prompt = (imagePromptText && imagePromptText.length > 0)
         ? imagePromptText
@@ -1239,7 +1258,7 @@ export default function Reader() {
     } catch { }
   }
 
-  const handlePreviousParagraph = () => {
+  const handlePreviousParagraph = async () => {
     if (mergedEnd > mergedStart) {
       const win = mergedEnd - mergedStart + 1
       const ns = Math.max(0, mergedStart - 1)
@@ -1249,6 +1268,15 @@ export default function Reader() {
       setCurrentParagraphIndex(ns)
 
       ensureMergedData(ns, ne)
+      try {
+        const vis = paragraphs
+          .slice(ns, Math.min(ne + 1, paragraphs.length))
+          .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
+          .map(pp => getParagraphId(pp))
+        setSelectedIds(vis)
+      } catch { }
+      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech() } } catch { }
+      try { if (showTranslation && !isTranslating) await handleTranslation() } catch { }
       return
     }
     if (currentParagraphIndex > 0) {
@@ -1258,12 +1286,21 @@ export default function Reader() {
       setMergedEnd(prevStart)
 
       ensureMergedData(prevStart, prevStart)
+      try {
+        const vis = paragraphs
+          .slice(prevStart, Math.min(prevStart + 1, paragraphs.length))
+          .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
+          .map(pp => getParagraphId(pp))
+        setSelectedIds(vis)
+      } catch { }
+      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech() } } catch { }
+      try { if (showTranslation && !isTranslating) await handleTranslation() } catch { }
     } else if (paragraphs.length <= 1) {
       handlePrevChapter()
     }
   }
 
-  const handleNextParagraph = () => {
+  const handleNextParagraph = async () => {
     if (mergedEnd > mergedStart) {
       const win = mergedEnd - mergedStart + 1
       const ne = Math.min(paragraphs.length - 1, mergedEnd + 1)
@@ -1273,6 +1310,15 @@ export default function Reader() {
       setCurrentParagraphIndex(ns)
 
       ensureMergedData(ns, ne)
+      try {
+        const vis = paragraphs
+          .slice(ns, Math.min(ne + 1, paragraphs.length))
+          .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
+          .map(pp => getParagraphId(pp))
+        setSelectedIds(vis)
+      } catch { }
+      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech() } } catch { }
+      try { if (showTranslation && !isTranslating) await handleTranslation() } catch { }
       return
     }
     if (currentParagraphIndex < paragraphs.length - 1) {
@@ -1282,6 +1328,15 @@ export default function Reader() {
       setMergedEnd(nextIndex)
 
       ensureMergedData(nextIndex, nextIndex)
+      try {
+        const vis = paragraphs
+          .slice(nextIndex, Math.min(nextIndex + 1, paragraphs.length))
+          .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
+          .map(pp => getParagraphId(pp))
+        setSelectedIds(vis)
+      } catch { }
+      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech() } } catch { }
+      try { if (showTranslation && !isTranslating) await handleTranslation() } catch { }
     } else if (paragraphs.length <= 1) {
       handleNextChapter()
     }
@@ -1904,7 +1959,7 @@ export default function Reader() {
                 <div className="mt-2 text-xs text-slate-700">
                   {(() => {
                     const ids = getOrderedSelectedIds()
-                    const targetId = ids[ids.length - 1]
+                    const targetId = ids[0]
                     const storeText = (translations || []).find(t => t.paragraph_id === targetId)?.translated_text || ''
                     const tText = mergedTranslationsMap[targetId] || storeText
                     if (isTranslating) return <span>翻译中...</span>
@@ -1914,7 +1969,7 @@ export default function Reader() {
                 </div>
                 {(() => {
                   const ids = getOrderedSelectedIds()
-                  const targetId = ids[ids.length - 1]
+                  const targetId = ids[0]
                   const storeText = (translations || []).find(t => t.paragraph_id === targetId)?.translated_text || ''
                   const tText = mergedTranslationsMap[targetId] || storeText
                   if (tText && tText.length > 0) {
