@@ -840,13 +840,11 @@ export default function Reader() {
 
   const constructFrame = (msgType: number, payload: Uint8Array, serialization: number = 1, flags: number = 0) => {
     const header = new Uint8Array(4)
-    // Byte 0: Version (4 bits) | Message Type (4 bits)
-    header[0] = (0x1 << 4) | (msgType & 0xF)
-    // Byte 1: Message Type Specific Flags (4 bits) | Serialization Method (4 bits)
-    header[1] = ((flags & 0xF) << 4) | (serialization & 0xF)
-    // Byte 2: Compression (0 = None)
-    header[2] = 0x0
-    // Byte 3: Reserved
+    const version = 0x1
+    const headerSize = 0x1
+    header[0] = ((version & 0xF) << 4) | (headerSize & 0xF)
+    header[1] = ((msgType & 0xF) << 4) | (flags & 0xF)
+    header[2] = ((serialization & 0xF) << 4) | 0x0
     header[3] = 0x0
 
     const len = payload.length
@@ -925,11 +923,13 @@ export default function Reader() {
           if (ev.data instanceof ArrayBuffer) {
             const buf = new Uint8Array(ev.data)
             if (buf.length >= 8) {
-              const header = buf[0]
-              const msgType = header & 0xF
-              const sizeVal = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7]
-              if (buf.length >= 8 + sizeVal) {
-                payloadBytes = buf.slice(8, 8 + sizeVal)
+              const hdrLen = (((buf[0] & 0xF) || 1) * 4) >>> 0
+              const msgType = (buf[1] >> 4) & 0xF
+              const sizeIdx = hdrLen
+              const sizeVal = (buf[sizeIdx] << 24) | (buf[sizeIdx + 1] << 16) | (buf[sizeIdx + 2] << 8) | buf[sizeIdx + 3]
+              const payloadIdx = sizeIdx + 4
+              if (buf.length >= payloadIdx + sizeVal) {
+                payloadBytes = buf.slice(payloadIdx, payloadIdx + sizeVal)
                 // MsgType 9 = Full Server Response, 15 = Error
                 if (msgType === 0xF) { // Error
                   setAsrStatus('error')
@@ -1096,8 +1096,6 @@ export default function Reader() {
           const dataUrl = String(reader.result || '')
           if (dataUrl) {
             try { setAsrDebug((d: any) => ({ ...(d || {}), dataUrl_len: dataUrl.length })) } catch { }
-            addAudio(bid, currentChapter?.id || '', pid, dataUrl, 'record', undefined)
-            ensureMergedData(mergedStart, mergedEnd)
             try { const audio = new Audio(dataUrl); audio.play() } catch { }
             try {
               setAsrStatus('recognizing')
@@ -1199,7 +1197,10 @@ export default function Reader() {
       loadNotesSmart(bids, pid)
       loadImages(getBookKey(), pid)
       loadTranslation(getBookKey(), pid)
-      loadAudios(getBookKey(), pid)
+      try {
+        const disabled = (() => { try { const env = (import.meta as any)?.env?.VITE_DISABLE_AUDIOS === '1'; const ls = typeof localStorage !== 'undefined' && localStorage.getItem('disable_audios_table') === '1'; return env || ls } catch { return false } })()
+        if (!disabled) loadAudios(getBookKey(), pid)
+      } catch { }
     }
   }, [currentBook, currentParagraphIndex, paragraphs])
 

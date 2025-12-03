@@ -38,7 +38,8 @@ export const useAudiosStore = create<AudiosState>((set, get) => ({
   audios: [],
   loadAudios: (bookId: string, paragraphId: string) => {
     const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
-    const supa = isSupabaseConfigured && supabase && (!(useAudiosStore as any)._supaDown || cloudOnly)
+    const disabled = (() => { try { const env = (import.meta as any)?.env?.VITE_DISABLE_AUDIOS === '1'; const ls = typeof localStorage !== 'undefined' && localStorage.getItem('disable_audios_table') === '1'; return env || ls } catch { return false } })()
+    const supa = isSupabaseConfigured && supabase && (!(useAudiosStore as any)._supaDown || cloudOnly) && !(useAudiosStore as any)._audiosUnsupported && !disabled
     if (supa) {
       ;(async () => {
         try {
@@ -57,8 +58,10 @@ export const useAudiosStore = create<AudiosState>((set, get) => ({
             created_at: row.created_at,
           }))
           set({ audios: list })
-        } catch {
-          if (!cloudOnly) { (useAudiosStore as any)._supaDown = true }
+        } catch (e: any) {
+          (useAudiosStore as any)._supaDown = true
+          const status = (e && (e.status || e.code)) || 0
+          if (status === 404 || String(status) === '404') { (useAudiosStore as any)._audiosUnsupported = true }
           try {
             const raw = localStorage.getItem(KEY)
             const map = raw ? JSON.parse(raw) : {}
@@ -79,7 +82,8 @@ export const useAudiosStore = create<AudiosState>((set, get) => ({
     } catch { set({ audios: [] }) }
   },
   addAudio: (bookId: string, chapterId: string, paragraphId: string, dataUrl: string, provider?: string, voiceType?: string) => {
-    const supa = isSupabaseConfigured && supabase
+    const disabled = (() => { try { const env = (import.meta as any)?.env?.VITE_DISABLE_AUDIOS === '1'; const ls = typeof localStorage !== 'undefined' && localStorage.getItem('disable_audios_table') === '1'; return env || ls } catch { return false } })()
+    const supa = isSupabaseConfigured && supabase && !(disabled || (useAudiosStore as any)._audiosUnsupported)
     if (supa) {
       ;(async () => {
         try {
@@ -112,7 +116,30 @@ export const useAudiosStore = create<AudiosState>((set, get) => ({
             created_at: data.created_at,
           }
           set({ audios: [item, ...get().audios] })
-        } catch {}
+        } catch (e: any) {
+          (useAudiosStore as any)._supaDown = true
+          const status = (e && (e.status || e.code)) || 0
+          if (status === 404 || String(status) === '404') { (useAudiosStore as any)._audiosUnsupported = true }
+          const item: AudioItem = {
+            id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+            paragraph_id: paragraphId,
+            audio_url: dataUrl,
+            provider,
+            voice_type: voiceType,
+            created_at: new Date().toISOString(),
+          }
+          try {
+            const raw = localStorage.getItem(KEY)
+            const map = raw ? JSON.parse(raw) : {}
+            const bookMap = map[bookId] || {}
+            const list: AudioItem[] = bookMap[paragraphId] || []
+            const updated = [item, ...list]
+            bookMap[paragraphId] = updated
+            map[bookId] = bookMap
+            localStorage.setItem(KEY, JSON.stringify(map))
+            set({ audios: updated })
+          } catch { set(state => ({ audios: [item, ...(state.audios || [])] })) }
+        }
       })()
       return
     }
@@ -137,7 +164,8 @@ export const useAudiosStore = create<AudiosState>((set, get) => ({
     } catch { set(state => ({ audios: [item, ...(state.audios || [])] })) }
   },
   deleteAudio: (bookId: string, paragraphId: string, audioId: string) => {
-    const supa = isSupabaseConfigured && supabase
+    const disabled = (() => { try { const env = (import.meta as any)?.env?.VITE_DISABLE_AUDIOS === '1'; const ls = typeof localStorage !== 'undefined' && localStorage.getItem('disable_audios_table') === '1'; return env || ls } catch { return false } })()
+    const supa = isSupabaseConfigured && supabase && !(disabled || (useAudiosStore as any)._audiosUnsupported)
     if (supa) {
       ;(async () => {
         try {
@@ -148,7 +176,22 @@ export const useAudiosStore = create<AudiosState>((set, get) => ({
           if (error) throw error
           const updated = get().audios.filter(a => a.id !== audioId)
           set({ audios: updated })
-        } catch {}
+        } catch (e: any) {
+          (useAudiosStore as any)._supaDown = true
+          const status = (e && (e.status || e.code)) || 0
+          if (status === 404 || String(status) === '404') { (useAudiosStore as any)._audiosUnsupported = true }
+          try {
+            const raw = localStorage.getItem(KEY)
+            const map = raw ? JSON.parse(raw) : {}
+            const bookMap = map[bookId] || {}
+            const list: AudioItem[] = bookMap[paragraphId] || []
+            const updated = list.filter(a => a.id !== audioId)
+            bookMap[paragraphId] = updated
+            map[bookId] = bookMap
+            localStorage.setItem(KEY, JSON.stringify(map))
+            set({ audios: updated })
+          } catch {}
+        }
       })()
       return
     }

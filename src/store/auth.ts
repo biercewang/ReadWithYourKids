@@ -11,6 +11,7 @@ interface AuthState {
   signUp: (email: string, password: string, name: string) => Promise<void>
   signOut: () => Promise<void>
   checkAuth: () => Promise<void>
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>
 }
 
 const loadDemoUser = (): User => {
@@ -188,6 +189,30 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (error) {
       console.error('Auth check error:', error)
       set({ user: null, isAuthenticated: false, isLoading: false })
+    }
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    try {
+      if (!isSupabaseConfigured || !supabase) {
+        return
+      }
+      const { data: sessionData } = await supabase.auth.getSession()
+      const email = sessionData?.session?.user?.email || ''
+      if (!email) {
+        throw new Error('未登录或会话已过期')
+      }
+      const { error: verifyError } = await supabase.auth.signInWithPassword({ email, password: currentPassword })
+      if (verifyError) {
+        throw new Error('当前密码不正确')
+      }
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+      if (updateError) {
+        throw new Error(updateError.message || '修改密码失败')
+      }
+    } catch (error) {
+      console.error('Change password error:', error)
+      throw error
     }
   },
 }))

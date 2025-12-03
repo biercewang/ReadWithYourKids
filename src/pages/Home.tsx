@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/auth'
 import { useBooksStore } from '../store/books'
 import { useNavigate } from 'react-router-dom'
-import { Book, Upload, Plus, BookOpen, Trash2, Play } from 'lucide-react'
+import { Book, Upload, Plus, BookOpen, Trash2, Play, KeyRound } from 'lucide-react'
 import { parseMarkdownFile } from '../utils/mdParser'
 import { EPUBParser } from '../utils/epubParser'
 import { newId } from '../utils/id'
@@ -17,6 +17,13 @@ export default function Home() {
   const [dragOver, setDragOver] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [bookToDelete, setBookToDelete] = useState<BookType | null>(null)
+  const [changePwdOpen, setChangePwdOpen] = useState(false)
+  const [currPwd, setCurrPwd] = useState('')
+  const [newPwd, setNewPwd] = useState('')
+  const [confirmPwd, setConfirmPwd] = useState('')
+  const [changing, setChanging] = useState(false)
+  const [changeError, setChangeError] = useState('')
+  const [changeOk, setChangeOk] = useState('')
 
   useEffect(() => {
     if (!authLoading) {
@@ -269,6 +276,24 @@ export default function Home() {
     setBookToDelete(null)
   }
 
+  const submitChangePassword = async () => {
+    setChangeError('')
+    setChangeOk('')
+    if (!currPwd || !newPwd || !confirmPwd) { setChangeError('请填写完整'); return }
+    if (newPwd.length < 6) { setChangeError('新密码至少6位'); return }
+    if (newPwd !== confirmPwd) { setChangeError('两次输入的新密码不一致'); return }
+    try {
+      setChanging(true)
+      await useAuthStore.getState().changePassword(currPwd, newPwd)
+      setChangeOk('密码修改成功')
+      setTimeout(() => { setChangePwdOpen(false); setChangeOk('') }, 1200)
+    } catch (e: any) {
+      setChangeError(e?.message || '修改密码失败')
+    } finally {
+      setChanging(false)
+    }
+  }
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -303,6 +328,13 @@ export default function Home() {
                 <span>只使用云端</span>
               </label>
               <span className="text-gray-700">欢迎，{user?.name}</span>
+              <button
+                onClick={() => { setChangePwdOpen(true); setChangeError(''); setChangeOk(''); setCurrPwd(''); setNewPwd(''); setConfirmPwd('') }}
+                className="text-gray-500 hover:text-gray-700 inline-flex items-center"
+              >
+                <KeyRound className="h-4 w-4 mr-1" />
+                修改密码
+              </button>
               <button
                 onClick={() => {
                   useAuthStore.getState().signOut()
@@ -413,6 +445,42 @@ export default function Home() {
             <div className="flex justify-end space-x-3">
               <button onClick={cancelDelete} className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">取消</button>
               <button onClick={confirmDelete} className="px-4 py-2 rounded-md text-white bg-red-600 hover:bg-red-700">删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {changePwdOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+            <h4 className="text-lg font-semibold text-gray-900 mb-3">修改密码</h4>
+            <div className="space-y-3">
+              <input
+                type="password"
+                placeholder="当前密码"
+                value={currPwd}
+                onChange={(e)=>setCurrPwd(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="password"
+                placeholder="新密码（至少6位）"
+                value={newPwd}
+                onChange={(e)=>setNewPwd(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="password"
+                placeholder="确认新密码"
+                value={confirmPwd}
+                onChange={(e)=>setConfirmPwd(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              />
+              {changeError && <div className="text-sm text-red-600">{changeError}</div>}
+              {changeOk && <div className="text-sm text-green-600">{changeOk}</div>}
+            </div>
+            <div className="flex justify-end space-x-3 mt-4">
+              <button onClick={()=>setChangePwdOpen(false)} className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">取消</button>
+              <button onClick={submitChangePassword} disabled={changing} className="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">{changing ? '修改中...' : '确认修改'}</button>
             </div>
           </div>
         </div>
