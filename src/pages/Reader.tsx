@@ -109,7 +109,7 @@ export default function Reader() {
   const [showTtsDebug, setShowTtsDebug] = useState(false)
   const [showTtsConfig, setShowTtsConfig] = useState(false)
   const [ttsVoiceType, setTtsVoiceType] = useState<string>(() => {
-    try { return localStorage.getItem('volc_tts_voice_type') || 'BV700_streaming' } catch { return 'BV700_streaming' }
+    try { return localStorage.getItem('volc_tts_voice_type') || 'BV511_streaming' } catch { return 'BV511_streaming' }
   })
   const [ttsLanguage, setTtsLanguage] = useState<string>(() => {
     try { return localStorage.getItem('volc_tts_language') || '' } catch { return '' }
@@ -147,27 +147,21 @@ export default function Reader() {
   })()
   const [appliedSavedIndex, setAppliedSavedIndex] = useState(false)
   const [appliedSavedMerge, setAppliedSavedMerge] = useState(false)
-  const VOICE_OPTIONS = [
-    'BV700_streaming', 'BV001_streaming', 'BV002_streaming', 'BV100_streaming', 'BV200_streaming',
-    'zh_male_lengkugege_emo_v2_mars_bigtts',
-    'zh_female_tianxinxiaomei_emo_v2_mars_bigtts',
-    'zh_female_gaolengyujie_emo_v2_mars_bigtts',
-    'zh_male_aojiaobazong_emo_v2_mars_bigtts',
-    'zh_male_guangzhoudege_emo_mars_bigtts',
-    'zh_male_jingqiangkanye_emo_mars_bigtts',
-    'zh_female_linjuayi_emo_v2_mars_bigtts',
-    'zh_male_yourougongzi_emo_v2_mars_bigtts',
-    'zh_male_ruyayichen_emo_v2_mars_bigtts',
-    'zh_male_junlangnanyou_emo_v2_mars_bigtts',
-    'zh_male_beijingxiaoye_emo_v2_mars_bigtts',
-    'zh_female_roumeinvyou_emo_v2_mars_bigtts',
-    'zh_male_yangguangqingnian_emo_v2_mars_bigtts',
-    'zh_female_meilinvyou_emo_v2_mars_bigtts',
-    'zh_female_shuangkuaisisi_emo_v2_mars_bigtts',
-    'en_female_candice_emo_v2_mars_bigtts',
-    'en_female_skye_emo_v2_mars_bigtts',
-    'en_male_glen_emo_v2_mars_bigtts'
+  const VOICES = [
+    { label: '美式英语 慵懒女声-Ava', value: 'BV511_streaming' },
+    { label: '美式英语 议论女声-Alicia', value: 'BV505_streaming' },
+    { label: '美式英语 情感女声-Lawrence', value: 'BV138_streaming' },
+    { label: '美式英语 美式女声-Amelia', value: 'BV027_streaming' },
+    { label: '美式英语 讲述女声-Amanda', value: 'BV502_streaming' },
+    { label: '美式英语 活力女声-Ariana', value: 'BV503_streaming' },
+    { label: '美式英语 活力男声-Jackson', value: 'BV504_streaming' },
+    { label: '美式英语 天才少女', value: 'BV421_streaming' },
+    { label: '美式英语 Stefan', value: 'BV702_streaming' },
+    { label: '美式英语 天真萌娃-Lily', value: 'BV506_streaming' },
+    { label: '英式英语 亲切女声-Anna', value: 'BV040_streaming' },
+    { label: '澳洲英语 澳洲男声-Henry', value: 'BV516_streaming' }
   ]
+  const VOICE_OPTIONS = VOICES.map(v => v.value)
 
   useEffect(() => {
     try { localStorage.setItem('volc_tts_voice_type', ttsVoiceType) } catch { }
@@ -590,6 +584,7 @@ export default function Reader() {
       setTtsStatus('success')
       setTtsSource('doubao')
       setTtsDebug(raw)
+      setLastTtsModel((raw as any)?._voice_type || ttsVoiceType)
       setIsTtsPending(false)
       await audio.play()
     } catch (e) {
@@ -641,7 +636,7 @@ export default function Reader() {
       setTtsStatus('success')
       setTtsSource('doubao')
       setTtsDebug(raw)
-      setLastTtsModel(ttsVoiceType)
+      setLastTtsModel((raw as any)?._voice_type || ttsVoiceType)
       const audio = new Audio(audioUrl)
       audio.onended = () => { try { setCurrentAudio(null); setIsPlaying(false) } catch { } }
       audio.play()
@@ -1698,8 +1693,8 @@ export default function Reader() {
                             onChange={(e) => { const v = e.target.value; if (v === '__custom__') { setShowVoiceCustom(true) } else { setShowVoiceCustom(false); setTtsVoiceType(v); try { localStorage.setItem('volc_tts_voice_type', v) } catch { } } }}
                             className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white"
                           >
-                            {VOICE_OPTIONS.map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
+                            {VOICES.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
                             <option value="__custom__">自定义...</option>
                           </select>

@@ -306,7 +306,7 @@ const volcCluster = (
 const volcVoiceType = (
   (import.meta.env.VITE_VOLC_TTS_VOICE_TYPE as string) ||
   (typeof localStorage !== 'undefined' ? localStorage.getItem('volc_tts_voice_type') || '' : '') ||
-  'BV700_streaming'
+  'BV001_streaming'
 )
 const volcLanguage = (
   (import.meta.env.VITE_VOLC_TTS_LANGUAGE as string) ||
@@ -409,16 +409,31 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
   let authStyle: 'semicolon' = 'semicolon'
   let { res, source } = await tryFetch(v1Url, 'https://openspeech.bytedance.com/api/v1/tts')
   if (!res.ok) {
-    const msg = await res.text()
-    const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
-    throw new Error(JSON.stringify({ error: 'tts_failed', status: res.status, message: msg, reqid, token_mask: mask(volcToken), cluster: volcCluster, endpoint, auth: authStyle, source }))
+    let msg = ''
+    try { msg = await res.text() } catch {}
+    const needFallback = /requested resource not granted/i.test(msg || '') || /resource_id/i.test(msg || '')
+    if (needFallback) {
+      const alt = ['BV001_streaming','BV700_streaming','BV800_streaming'].filter(v => v !== (body.audio.voice_type || '') )
+      for (const vt of alt) {
+        body.audio.voice_type = vt
+        const r = await tryFetch(v1Url, 'https://openspeech.bytedance.com/api/v1/tts')
+        res = r.res
+        source = r.source
+        if (res.ok) break
+        try { msg = await res.text() } catch {}
+      }
+    }
+    if (!res.ok) {
+      const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
+      throw new Error(JSON.stringify({ error: 'tts_failed', status: res.status, message: msg, reqid, token_mask: mask(volcToken), cluster: volcCluster, endpoint, auth: authStyle, source }))
+    }
   }
   const data = await res.json()
   const base64 = data?.data || ''
   if (!base64 || typeof base64 !== 'string') throw new Error('豆包TTS未返回有效音频数据')
   const audioUrl = `data:audio/${body.audio.encoding};base64,${base64}`
   const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
-  return { audioUrl, raw: { ...data, _source: source, _endpoint: endpoint, _auth: authStyle, _appid: volcAppId, _token_mask: mask(volcToken), _cluster: volcCluster, _reqid: reqid } }
+  return { audioUrl, raw: { ...data, _source: source, _endpoint: endpoint, _auth: authStyle, _appid: volcAppId, _token_mask: mask(volcToken), _cluster: volcCluster, _reqid: reqid, _voice_type: body.audio.voice_type } }
 }
 
 export async function recognizeWithDoubaoFile(dataUrl: string) {
