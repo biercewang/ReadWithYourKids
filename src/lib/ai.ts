@@ -368,6 +368,7 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
   } catch {}
   const body = {
     app: {
+      appid: volcAppId,
       cluster: volcCluster,
     },
     user: {
@@ -394,32 +395,19 @@ export async function ttsWithDoubaoHttp(text: string, overrides?: {
   }
   const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
   const v1Url = isDev ? '/openspeech/api/v1/tts' : 'https://openspeech.bytedance.com/api/v1/tts'
-  const doReqStyle = async (u: string, direct: string, style: 'xapikey') => {
-    const buildHeaders = (s: 'semicolon'|'plain'|'xapikey') => {
-      const h: Record<string,string> = { 'Content-Type': 'application/json', 'Accept': 'application/json' }
-      if (s === 'xapikey') h['x-api-key'] = volcToken
-      else h['Authorization'] = (s==='semicolon' ? `Bearer; ${volcToken}` : `Bearer ${volcToken}`)
-      return h
-    }
+  const buildHeaders = () => ({ 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer;${volcToken}` })
+  const tryFetch = async (u: string, direct: string) => {
     try {
-      const r = await fetch(u, {
-        method: 'POST',
-        headers: buildHeaders(style),
-        body: JSON.stringify(body),
-      })
+      const r = await fetch(u, { method: 'POST', headers: buildHeaders(), body: JSON.stringify(body) })
       return { res: r, source: (u.startsWith('/openspeech') ? 'proxy' : 'direct') as 'proxy'|'direct' }
-    } catch (err) {
-      const r2 = await fetch(direct, {
-        method: 'POST',
-        headers: buildHeaders(style),
-        body: JSON.stringify(body),
-      })
+    } catch {
+      const r2 = await fetch(direct, { method: 'POST', headers: buildHeaders(), body: JSON.stringify(body) })
       return { res: r2, source: 'direct' as const }
     }
   }
-  let authStyle: 'xapikey' = 'xapikey'
   let endpoint: 'v1' = 'v1'
-  let { res, source } = await doReqStyle(v1Url, 'https://openspeech.bytedance.com/api/v1/tts', authStyle)
+  let authStyle: 'semicolon' = 'semicolon'
+  let { res, source } = await tryFetch(v1Url, 'https://openspeech.bytedance.com/api/v1/tts')
   if (!res.ok) {
     const msg = await res.text()
     const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
