@@ -85,6 +85,14 @@ export default function Reader() {
   const asrWsRef = useRef<WebSocket | null>(null)
   const asrSeqRef = useRef<number>(1)
   const asrStreamingRef = useRef<boolean>(false)
+  const asrPacketsRef = useRef<number>(0)
+  const asrLastPacketSizeRef = useRef<number>(0)
+  const asrStopClickAtRef = useRef<number | null>(null)
+  const ASR_RATE = 16000
+  const ASR_PACKET_MS = 200
+  const ASR_SAMPLES_PER_PACKET = Math.floor(ASR_RATE * ASR_PACKET_MS / 1000)
+  const asrSampleChunksRef = useRef<Int16Array[]>([])
+  const asrSampleTotalRef = useRef<number>(0)
 
   const [mergedStart, setMergedStart] = useState<number>(0)
   const [mergedEnd, setMergedEnd] = useState<number>(0)
@@ -129,6 +137,14 @@ export default function Reader() {
   const [cloudOnly, setCloudOnly] = useState<boolean>(() => {
     try { return localStorage.getItem('cloud_only') === '1' } catch { return false }
   })
+  const disableAudios = (() => {
+    try {
+      const env = (import.meta as any).env
+      const byEnv = String(env.VITE_DISABLE_AUDIOS || '') === '1'
+      const byLs = typeof localStorage !== 'undefined' && localStorage.getItem('disable_audios_table') === '1'
+      return byEnv || byLs
+    } catch { return false }
+  })()
   const [appliedSavedIndex, setAppliedSavedIndex] = useState(false)
   const [appliedSavedMerge, setAppliedSavedMerge] = useState(false)
   const VOICE_OPTIONS = [
@@ -307,14 +323,18 @@ export default function Reader() {
             .order('created_at', { ascending: false })
           newNotes[pid] = (nData || []).map(d => ({ id: d.id, book_id: bid, chapter_id: currentChapter?.id || '', paragraph_id: d.paragraph_id, user_type: d.user_type, content: d.content, created_at: d.created_at }))
         } catch { newNotes[pid] = newNotes[pid] || [] }
-        try {
-          const { data: aData } = await supabase
-            .from('audios')
-            .select('*')
-            .eq('paragraph_id', pid)
-            .order('created_at', { ascending: false })
-          newAud[pid] = (aData || []).map(a => ({ id: a.id, audio_url: a.audio_url }))
-        } catch { newAud[pid] = newAud[pid] || [] }
+        if (!disableAudios) {
+          try {
+            const { data: aData } = await supabase
+              .from('audios')
+              .select('*')
+              .eq('paragraph_id', pid)
+              .order('created_at', { ascending: false })
+            newAud[pid] = (aData || []).map(a => ({ id: a.id, audio_url: a.audio_url }))
+          } catch { newAud[pid] = newAud[pid] || [] }
+        } else {
+          newAud[pid] = newAud[pid] || []
+        }
       }
     } else {
       try {
@@ -571,11 +591,6 @@ export default function Reader() {
       setTtsSource('doubao')
       setTtsDebug(raw)
       setIsTtsPending(false)
-      if (currentBook && currentChapter) {
-        const bid = getBookKey()
-        addAudio(bid, currentChapter.id, targetId, audioUrl, 'doubao', ttsVoiceType)
-        ensureMergedData(mergedStart, mergedEnd)
-      }
       await audio.play()
     } catch (e) {
       setIsTtsPending(false)
@@ -632,11 +647,6 @@ export default function Reader() {
       audio.play()
       setCurrentAudio(audio)
       setIsPlaying(true)
-      if (currentBook && currentChapter) {
-        const bid = getBookKey()
-        addAudio(bid, currentChapter.id, targetId, audioUrl, 'doubao', ttsVoiceType)
-        ensureMergedData(mergedStart, mergedEnd)
-      }
     } catch (e) {
       setTtsStatus('error')
       setTtsSource('')
@@ -867,28 +877,49 @@ export default function Reader() {
       const lang = (ttsLanguage && ttsLanguage.length > 0) ? (ttsLanguage === 'cn' ? 'zh-CN' : ttsLanguage) : undefined
       const connectId = crypto.randomUUID ? crypto.randomUUID() : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const reqId = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const proto = (typeof location !== 'undefined' && location.protocol === 'https:') ? 'wss' : 'ws'
-      const wsUrl = `${proto}://${location.host}/asr/api/v2/asr`
+      const env = (import.meta as any).env
+      const appid = env.VITE_VOLC_ASR_APP_KEY || env.VITE_VOLC_TTS_APP_ID || ''
+      const access = env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || ''
+      const resource = env.VITE_VOLC_ASR_SAUC_RESOURCE_ID || 'volc.seedasr.sauc.duration'
+      const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
+      const q = new URLSearchParams()
+      q.set('X-Api-App-Key', appid)
+      q.set('X-Api-Access-Key', access)
+      q.set('X-Api-Resource-Id', resource)
+      q.set('X-Api-Connect-Id', connectId)
+      q.set('apikey', appid)
+      q.set('accesskey', access)
+      q.set('resourceid', resource)
+      const wsUrl = `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async?${q.toString()}`
+      setAsrDebug((d: any) => ({ ...(d || {}), ws_url: wsUrl, app_key_mask: mask(appid), access_key_mask: mask(access), resource_id: resource, ws_query_len: q.toString().length }))
       const ws = new WebSocket(wsUrl)
       asrWsRef.current = ws
       asrStreamingRef.current = true
       ws.binaryType = 'arraybuffer'
       asrSeqRef.current = 1
+      asrPacketsRef.current = 0
+      asrLastPacketSizeRef.current = 0
+      asrStopClickAtRef.current = null
+      setAsrDebug((d: any) => ({ ...(d || {}), ws_url: wsUrl }))
 
       ws.onopen = () => {
-        setAsrDebug((d: any) => ({ ...(d || {}), ws_url: wsUrl }))
+        setAsrDebug((d: any) => ({
+          ...(d || {}),
+          ws_url: wsUrl,
+          connect_id: connectId,
+          req_id: reqId,
+          ws_ready_state: ws.readyState,
+          audio_packets_sent: asrPacketsRef.current,
+          last_packet_size: asrLastPacketSizeRef.current
+        }))
         setAsrStatus('recognizing')
 
-        const env = (import.meta as any).env
-        const appid = env.VITE_VOLC_ASR_APP_KEY || env.VITE_VOLC_TTS_APP_ID || ''
-        const token = env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || ''
         const cluster = env.VITE_VOLC_ASR_CLUSTER || 'volcengine_streaming_common'
 
         // Send Full Client Request (Type 1)
         const req = {
           app: {
             appid: appid,
-            token: token,
             cluster: cluster
           },
           user: {
@@ -897,22 +928,30 @@ export default function Reader() {
           request: {
             reqid: reqId,
             sequence: 1,
-            nbest: 1,
-            workflow: 'audio_in,resample,partition,vad,fe,decode,itn,nlu_punctuate',
-            result_type: 'full'
+            model_name: 'bigmodel',
+            enable_itn: true,
+            enable_punc: true,
+            enable_ddc: false,
+            enable_nonstream: true
           },
           audio: {
-            format: 'raw',
+            format: 'pcm',
+            codec: 'raw',
             rate: 16000,
             bits: 16,
-            channel: 1,
-            codec: 'raw'
+            channel: 1
           }
         }
         try {
           const jsonBytes = new TextEncoder().encode(JSON.stringify(req))
           const frame = constructFrame(1, jsonBytes, 1) // Type 1, Serialization 1 (JSON)
           ws.send(frame)
+          setAsrDebug((d: any) => ({
+            ...(d || {}),
+            app_id: appid,
+            cluster,
+            client_request_len: jsonBytes.length
+          }))
         } catch { }
       }
 
@@ -935,10 +974,11 @@ export default function Reader() {
                   setAsrStatus('error')
                   try {
                     const errJson = JSON.parse(new TextDecoder().decode(payloadBytes))
-                    setAsrDebug((d: any) => ({ ...(d || {}), ws_error_frame: errJson }))
+                    setAsrDebug((d: any) => ({ ...(d || {}), ws_error_frame: errJson, last_msg_type: msgType, last_payload_len: sizeVal }))
                   } catch { }
                   return
                 }
+                setAsrDebug((d: any) => ({ ...(d || {}), last_msg_type: msgType, last_payload_len: sizeVal }))
               }
             }
           } else if (typeof ev.data === 'string') {
@@ -960,12 +1000,12 @@ export default function Reader() {
         } catch { }
       }
 
-      ws.onerror = (e) => { setAsrStatus('error'); setAsrDebug((d: any) => ({ ...(d || {}), ws_error: String(e) })) }
+      ws.onerror = (e) => { setAsrStatus('error'); setAsrDebug((d: any) => ({ ...(d || {}), ws_error: String(e), ws_ready_state: ws.readyState })) }
       ws.onclose = (ev) => {
         asrStreamingRef.current = false
         if (ev.code !== 1000) {
           setAsrStatus('error')
-          setAsrDebug((d: any) => ({ ...(d || {}), ws_close: { code: ev.code, reason: ev.reason } }))
+          setAsrDebug((d: any) => ({ ...(d || {}), ws_close: { code: ev.code, reason: ev.reason }, ws_ready_state: ws.readyState }))
         } else {
           setAsrStatus('idle')
         }
@@ -1026,12 +1066,37 @@ export default function Reader() {
 
       node.port.onmessage = (ev: MessageEvent) => {
         if (!asrStreamingRef.current || !asrWsRef.current) return
-        const bytes = new Uint8Array(ev.data as ArrayBuffer)
-        // Send Audio Only Request (Type 2)
-        // Serialization 0 (None/Raw)
+        const samples = new Int16Array(ev.data as ArrayBuffer)
+        asrSampleChunksRef.current.push(samples)
+        asrSampleTotalRef.current += samples.length
         try {
-          const frame = constructFrame(2, bytes, 0)
-          asrWsRef.current.send(frame)
+          while (asrSampleTotalRef.current >= ASR_SAMPLES_PER_PACKET) {
+            let need = ASR_SAMPLES_PER_PACKET
+            const out = new Int16Array(ASR_SAMPLES_PER_PACKET)
+            let offset = 0
+            while (need > 0 && asrSampleChunksRef.current.length > 0) {
+              const head = asrSampleChunksRef.current[0]
+              if (head.length <= need) {
+                out.set(head, offset)
+                offset += head.length
+                need -= head.length
+                asrSampleChunksRef.current.shift()
+              } else {
+                out.set(head.subarray(0, need), offset)
+                const remain = head.subarray(need)
+                asrSampleChunksRef.current[0] = remain
+                offset += need
+                need = 0
+              }
+            }
+            asrSampleTotalRef.current -= ASR_SAMPLES_PER_PACKET
+            const bytes = new Uint8Array(out.buffer)
+            const frame = constructFrame(2, bytes, 0)
+            asrWsRef.current.send(frame)
+            asrPacketsRef.current += 1
+            asrLastPacketSizeRef.current = bytes.length
+            setAsrDebug((d: any) => ({ ...(d || {}), audio_packets_sent: asrPacketsRef.current, last_packet_size: asrLastPacketSizeRef.current }))
+          }
         } catch { }
       }
       setIsRecording(true)
@@ -1041,15 +1106,40 @@ export default function Reader() {
   const stopStreamingAsr = async () => {
     try {
       asrStreamingRef.current = false
+      asrStopClickAtRef.current = Date.now()
+      setAsrDebug((d: any) => ({ ...(d || {}), stop_click_at: asrStopClickAtRef.current, ws_ready_state: asrWsRef.current?.readyState }))
       try { (recStreamRef.current?.getTracks() || []).forEach(t => t.stop()) } catch { }
       try { recAudioCtxRef.current?.close() } catch { }
       try {
-        // Send last audio packet (Type 2) with specific flags
-        // Flag 0b0010 (2) indicates last packet
-        if (asrWsRef.current) {
-          const empty = new Uint8Array(0)
-          const frame = constructFrame(2, empty, 0, 0x2)
-          try { asrWsRef.current.send(frame) } catch { }
+        if (asrWsRef.current && asrWsRef.current.readyState === WebSocket.OPEN) {
+          try {
+            if (asrSampleTotalRef.current > 0) {
+              let remain = asrSampleTotalRef.current
+              const out = new Int16Array(remain)
+              let offset = 0
+              while (remain > 0 && asrSampleChunksRef.current.length > 0) {
+                const head = asrSampleChunksRef.current.shift()!
+                out.set(head, offset)
+                offset += head.length
+                remain -= head.length
+              }
+              asrSampleTotalRef.current = 0
+              const bytes = new Uint8Array(out.buffer)
+              const frameFlush = constructFrame(2, bytes, 0)
+              asrWsRef.current.send(frameFlush)
+              asrPacketsRef.current += 1
+              asrLastPacketSizeRef.current = bytes.length
+              setAsrDebug((d: any) => ({ ...(d || {}), audio_packets_sent: asrPacketsRef.current, last_packet_size: asrLastPacketSizeRef.current, final_flush_samples: out.length }))
+            }
+          } catch { }
+          try {
+            const empty = new Uint8Array(0)
+            const frame = constructFrame(2, empty, 0, 0x2)
+            asrWsRef.current.send(frame)
+            setAsrDebug((d: any) => ({ ...(d || {}), final_packet_sent: true }))
+          } catch { }
+        } else {
+          setAsrDebug((d: any) => ({ ...(d || {}), final_packet_sent: false, ws_ready_state: asrWsRef.current?.readyState }))
         }
       } catch { }
       try { asrWsRef.current?.close() } catch { }
@@ -1846,8 +1936,28 @@ export default function Reader() {
                   {showAsrDebug && (
                     <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-700">
                       <div>状态：{asrStatus}</div>
+                      <div>WS地址：{String(asrDebug?.ws_url || '')}</div>
+                      <div>WS就绪状态：{String(asrDebug?.ws_ready_state ?? '')}</div>
+                      <div>连接ID：{String(asrDebug?.connect_id || '')}</div>
+                      <div>请求ID：{String(asrDebug?.req_id || '')}</div>
+                      <div>AppID：{String(asrDebug?.app_id || '')}</div>
+                      <div>AppKey掩码：{String(asrDebug?.app_key_mask || '')}</div>
+                      <div>AccessKey掩码：{String(asrDebug?.access_key_mask || '')}</div>
+                      <div>ResourceId：{String(asrDebug?.resource_id || '')}</div>
+                      <div>查询参数长度：{String(asrDebug?.ws_query_len ?? '')}</div>
+                      <div>集群：{String(asrDebug?.cluster || '')}</div>
+                      <div>客户端请求长度：{String(asrDebug?.client_request_len ?? '')}</div>
+                      <div>已发送音频包：{String(asrDebug?.audio_packets_sent ?? '')}</div>
+                      <div>最后包大小：{String(asrDebug?.last_packet_size ?? '')}</div>
+                      <div>最后消息类型：{String(asrDebug?.last_msg_type ?? '')}</div>
+                      <div>最后消息载荷长度：{String(asrDebug?.last_payload_len ?? '')}</div>
+                      <div>停止点击时间：{String(asrDebug?.stop_click_at ?? '')}</div>
+                      <div>已发送最后包：{String(asrDebug?.final_packet_sent ? '是' : '否')}</div>
                       <div>音频DataURL长度：{String(asrDebug?.dataUrl_len || '')}</div>
                       <div>识别返回：{asrDebug?.response ? JSON.stringify(asrDebug.response) : '无'}</div>
+                      {asrDebug?.ws_close && <div>WS关闭：{JSON.stringify(asrDebug.ws_close)}</div>}
+                      {asrDebug?.ws_error_frame && <div className="text-red-700">服务端错误帧：{JSON.stringify(asrDebug.ws_error_frame)}</div>}
+                      {asrDebug?.ws_error && <div className="text-red-700">WS错误：{String(asrDebug.ws_error)}</div>}
                       {asrDebug?.error && <div className="text-red-700">错误：{String(asrDebug.error)}</div>}
                     </div>
                   )}
