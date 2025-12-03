@@ -878,7 +878,7 @@ export default function Reader() {
       const connectId = crypto.randomUUID ? crypto.randomUUID() : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const reqId = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const proto = (typeof location !== 'undefined' && location.protocol === 'https:') ? 'wss' : 'ws'
-      const wsUrl = `${proto}://${location.host}/sauc/api/v3/sauc/bigmodel_async`
+      const wsUrl = `${proto}://${location.host}/asr/api/v2/asr`
       setAsrDebug((d: any) => ({ ...(d || {}), ws_url: wsUrl }))
       const ws = new WebSocket(wsUrl)
       asrWsRef.current = ws
@@ -918,14 +918,12 @@ export default function Reader() {
           request: {
             reqid: reqId,
             sequence: 1,
-            model_name: 'bigmodel',
-            enable_itn: true,
-            enable_punc: true,
-            enable_ddc: false,
-            enable_nonstream: true
+            nbest: 1,
+            workflow: 'audio_in,resample,partition,vad,fe,decode,itn,nlu_punctuate',
+            result_type: 'full'
           },
           audio: {
-            format: 'pcm',
+            format: 'raw',
             codec: 'raw',
             rate: 16000,
             bits: 16,
