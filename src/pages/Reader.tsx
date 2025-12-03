@@ -877,21 +877,9 @@ export default function Reader() {
       const lang = (ttsLanguage && ttsLanguage.length > 0) ? (ttsLanguage === 'cn' ? 'zh-CN' : ttsLanguage) : undefined
       const connectId = crypto.randomUUID ? crypto.randomUUID() : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`
       const reqId = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      const env = (import.meta as any).env
-      const appid = env.VITE_VOLC_ASR_APP_KEY || env.VITE_VOLC_TTS_APP_ID || ''
-      const access = env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || ''
-      const resource = env.VITE_VOLC_ASR_SAUC_RESOURCE_ID || 'volc.seedasr.sauc.duration'
-      const mask = (s: string) => s ? `${s.slice(0,4)}...${s.slice(-4)} (${s.length})` : ''
-      const q = new URLSearchParams()
-      q.set('X-Api-App-Key', appid)
-      q.set('X-Api-Access-Key', access)
-      q.set('X-Api-Resource-Id', resource)
-      q.set('X-Api-Connect-Id', connectId)
-      q.set('apikey', appid)
-      q.set('accesskey', access)
-      q.set('resourceid', resource)
-      const wsUrl = `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async?${q.toString()}`
-      setAsrDebug((d: any) => ({ ...(d || {}), ws_url: wsUrl, app_key_mask: mask(appid), access_key_mask: mask(access), resource_id: resource, ws_query_len: q.toString().length }))
+      const proto = (typeof location !== 'undefined' && location.protocol === 'https:') ? 'wss' : 'ws'
+      const wsUrl = `${proto}://${location.host}/sauc/api/v3/sauc/bigmodel_async`
+      setAsrDebug((d: any) => ({ ...(d || {}), ws_url: wsUrl }))
       const ws = new WebSocket(wsUrl)
       asrWsRef.current = ws
       asrStreamingRef.current = true
@@ -914,12 +902,14 @@ export default function Reader() {
         }))
         setAsrStatus('recognizing')
 
-        const cluster = env.VITE_VOLC_ASR_CLUSTER || 'volcengine_streaming_common'
+        const env2 = (import.meta as any).env
+        const appid2 = env2.VITE_VOLC_ASR_APP_KEY || env2.VITE_VOLC_TTS_APP_ID || ''
+        const cluster = env2.VITE_VOLC_ASR_CLUSTER || 'volcengine_streaming_common'
 
         // Send Full Client Request (Type 1)
         const req = {
           app: {
-            appid: appid,
+            appid: appid2,
             cluster: cluster
           },
           user: {
@@ -946,12 +936,7 @@ export default function Reader() {
           const jsonBytes = new TextEncoder().encode(JSON.stringify(req))
           const frame = constructFrame(1, jsonBytes, 1) // Type 1, Serialization 1 (JSON)
           ws.send(frame)
-          setAsrDebug((d: any) => ({
-            ...(d || {}),
-            app_id: appid,
-            cluster,
-            client_request_len: jsonBytes.length
-          }))
+          setAsrDebug((d: any) => ({ ...(d || {}), cluster, client_request_len: jsonBytes.length }))
         } catch { }
       }
 
@@ -1941,10 +1926,7 @@ export default function Reader() {
                       <div>连接ID：{String(asrDebug?.connect_id || '')}</div>
                       <div>请求ID：{String(asrDebug?.req_id || '')}</div>
                       <div>AppID：{String(asrDebug?.app_id || '')}</div>
-                      <div>AppKey掩码：{String(asrDebug?.app_key_mask || '')}</div>
-                      <div>AccessKey掩码：{String(asrDebug?.access_key_mask || '')}</div>
-                      <div>ResourceId：{String(asrDebug?.resource_id || '')}</div>
-                      <div>查询参数长度：{String(asrDebug?.ws_query_len ?? '')}</div>
+                      
                       <div>集群：{String(asrDebug?.cluster || '')}</div>
                       <div>客户端请求长度：{String(asrDebug?.client_request_len ?? '')}</div>
                       <div>已发送音频包：{String(asrDebug?.audio_packets_sent ?? '')}</div>

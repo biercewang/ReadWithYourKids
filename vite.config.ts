@@ -32,6 +32,7 @@ export default defineConfig(({ mode }) => {
           ws: true,
           rewrite: (path) => path.replace(/^\/sauc\//, '/'),
           headers: {
+            'Authorization': `Bearer ${env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || ''}`,
             'X-Api-App-Key': env.VITE_VOLC_ASR_APP_KEY || env.VITE_VOLC_TTS_APP_ID || '',
             'X-Api-Access-Key': env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || '',
             'X-Api-Resource-Id': env.VITE_VOLC_ASR_SAUC_RESOURCE_ID || 'volc.seedasr.sauc.duration',
@@ -40,6 +41,7 @@ export default defineConfig(({ mode }) => {
           configure: (proxy) => {
             proxy.on('proxyReqWs', (proxyReq, req) => {
               try {
+                proxyReq.setHeader('Authorization', `Bearer ${env.VITE_VOLC_ASR_ACCESS_KEY || env.VITE_VOLC_TTS_TOKEN || ''}`)
                 proxyReq.setHeader('Origin', 'https://openspeech.bytedance.com')
                 const cid = (globalThis.crypto && (globalThis.crypto as any).randomUUID) ? (globalThis.crypto as any).randomUUID() : `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`
                 proxyReq.setHeader('X-Api-Connect-Id', cid)
