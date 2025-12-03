@@ -563,9 +563,9 @@ export default function Reader() {
     })()
   }, [currentBook, currentChapter, paragraphs])
 
-  const handleTextToSpeech = async () => {
+  const handleTextToSpeech = async (idsOverride?: string[]) => {
     if (paragraphs.length === 0) return
-    const ids = getOrderedSelectedIds()
+    const ids = (idsOverride && idsOverride.length > 0) ? idsOverride : getOrderedSelectedIds()
     const targetId = ids[0]
     const text = getCombinedText(ids)
     try {
@@ -682,11 +682,11 @@ export default function Reader() {
     }
   }
 
-  const handleTranslation = async () => {
+  const handleTranslation = async (idsOverride?: string[]) => {
     if (paragraphs.length === 0) return
     try {
       const bid = getBookKey()
-      const ids = getOrderedSelectedIds()
+      const ids = (idsOverride && idsOverride.length > 0) ? idsOverride : getOrderedSelectedIds()
       const targetId = ids[0]
       const text = getCombinedText(ids)
       setIsTranslating(true)
@@ -1268,15 +1268,16 @@ export default function Reader() {
       setCurrentParagraphIndex(ns)
 
       ensureMergedData(ns, ne)
+      let vis: string[] = []
       try {
-        const vis = paragraphs
+        vis = paragraphs
           .slice(ns, Math.min(ne + 1, paragraphs.length))
           .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
           .map(pp => getParagraphId(pp))
         setSelectedIds(vis)
       } catch { }
-      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech() } } catch { }
-      try { if (showTranslation && !isTranslating) await handleTranslation() } catch { }
+      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech(vis) } } catch { }
+      try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
       return
     }
     if (currentParagraphIndex > 0) {
@@ -1286,15 +1287,16 @@ export default function Reader() {
       setMergedEnd(prevStart)
 
       ensureMergedData(prevStart, prevStart)
+      let vis: string[] = []
       try {
-        const vis = paragraphs
+        vis = paragraphs
           .slice(prevStart, Math.min(prevStart + 1, paragraphs.length))
           .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
           .map(pp => getParagraphId(pp))
         setSelectedIds(vis)
       } catch { }
-      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech() } } catch { }
-      try { if (showTranslation && !isTranslating) await handleTranslation() } catch { }
+      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech(vis) } } catch { }
+      try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
     } else if (paragraphs.length <= 1) {
       handlePrevChapter()
     }
@@ -1310,15 +1312,16 @@ export default function Reader() {
       setCurrentParagraphIndex(ns)
 
       ensureMergedData(ns, ne)
+      let vis: string[] = []
       try {
-        const vis = paragraphs
+        vis = paragraphs
           .slice(ns, Math.min(ne + 1, paragraphs.length))
           .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
           .map(pp => getParagraphId(pp))
         setSelectedIds(vis)
       } catch { }
-      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech() } } catch { }
-      try { if (showTranslation && !isTranslating) await handleTranslation() } catch { }
+      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech(vis) } } catch { }
+      try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
       return
     }
     if (currentParagraphIndex < paragraphs.length - 1) {
@@ -1328,15 +1331,16 @@ export default function Reader() {
       setMergedEnd(nextIndex)
 
       ensureMergedData(nextIndex, nextIndex)
+      let vis: string[] = []
       try {
-        const vis = paragraphs
+        vis = paragraphs
           .slice(nextIndex, Math.min(nextIndex + 1, paragraphs.length))
           .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
           .map(pp => getParagraphId(pp))
         setSelectedIds(vis)
       } catch { }
-      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech() } } catch { }
-      try { if (showTranslation && !isTranslating) await handleTranslation() } catch { }
+      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech(vis) } } catch { }
+      try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
     } else if (paragraphs.length <= 1) {
       handleNextChapter()
     }
@@ -1908,7 +1912,7 @@ export default function Reader() {
             {showTranslation && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-blue-200 relative">
                 <div className="mb-2 px-4 flex items-center justify-evenly">
-                  <button onClick={handleTranslation} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isTranslating ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title="执行翻译">
+                  <button onClick={() => handleTranslation()} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isTranslating ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title="执行翻译">
                     <RefreshCw className={`h-5 w-5 ${isTranslating ? 'animate-spin' : ''}`} />
                   </button>
                   <button onClick={() => setShowTranslationConfig(!showTranslationConfig)} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="设置">
