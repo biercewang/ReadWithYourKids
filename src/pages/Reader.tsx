@@ -30,6 +30,10 @@ export default function Reader() {
   const { audios, loadAudios, addAudio, deleteAudio } = useAudiosStore()
   const [showImagePanel, setShowImagePanel] = useState(false)
   const [showVoicePanel, setShowVoicePanel] = useState(false)
+  const [hoverVoice, setHoverVoice] = useState(false)
+  const [hoverTranslation, setHoverTranslation] = useState(false)
+  const [hoverImage, setHoverImage] = useState(false)
+  const [hoverDiscussion, setHoverDiscussion] = useState(false)
   const [translationProvider, setTranslationProvider] = useState<string>(() => {
     try {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('translation_provider') || '' : ''
@@ -1854,38 +1858,43 @@ export default function Reader() {
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-4 py-2 flex items-center justify-evenly w-full">
               <button
-                onClick={async () => { const next = !showVoicePanel; setShowVoicePanel(next); if (next) { setShowImagePanel(false); setShowDiscussion(false); stopPlaying(); await handleTextToSpeech() } }}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isPlaying ? 'bg-blue-100 text-blue-600 animate-pulse' : (showVoicePanel ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}`}
+                onClick={async () => { const next = !showVoicePanel; setShowVoicePanel(next); if (next) { stopPlaying(); await handleTextToSpeech() } else { stopPlaying() } }}
+                onMouseEnter={() => setHoverVoice(true)}
+                onMouseLeave={() => setHoverVoice(false)}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isPlaying ? 'bg-blue-100 text-blue-600 animate-pulse' : (showVoicePanel ? 'bg-blue-100 text-blue-600' : (hoverVoice ? 'bg-gray-100 text-gray-700' : 'text-gray-600'))}`}
                 title="语音"
               >
                 <Volume2 className="h-5 w-5" />
               </button>
               <button
-                onClick={() => { const next = !showTranslation; setShowTranslation(next); if (next) { setShowImagePanel(false); setShowDiscussion(false); if (!isTranslating) { const ids = getOrderedSelectedIds(); const targetId = ids[0]; const storeText = (translations || []).find(t => t.paragraph_id === targetId)?.translated_text || ''; const tText = mergedTranslationsMap[targetId] || storeText; if (!tText || tText.length === 0 || needsRetranslate) { handleTranslation(); setNeedsRetranslate(false) } } } }}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showTranslation ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                onClick={() => { const next = !showTranslation; setShowTranslation(next); if (next) { if (!isTranslating) { const ids = getOrderedSelectedIds(); const targetId = ids[0]; const storeText = (translations || []).find(t => t.paragraph_id === targetId)?.translated_text || ''; const tText = mergedTranslationsMap[targetId] || storeText; if (!tText || tText.length === 0 || needsRetranslate) { handleTranslation(); setNeedsRetranslate(false) } } } }}
+                onMouseEnter={() => setHoverTranslation(true)}
+                onMouseLeave={() => setHoverTranslation(false)}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showTranslation ? 'bg-blue-100 text-blue-600' : (hoverTranslation ? 'bg-gray-100 text-gray-700' : 'text-gray-600')}`}
                 title="翻译"
               >
                 <Languages className="h-5 w-5" />
               </button>
               <button
-                onClick={() => { const next = !showImagePanel; setShowImagePanel(next); if (next) { setShowTranslation(false); setShowDiscussion(false); setShowVoicePanel(false) } }}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : (showImagePanel ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}`}
+                onClick={() => { const next = !showImagePanel; setShowImagePanel(next) }}
+                onMouseEnter={() => setHoverImage(true)}
+                onMouseLeave={() => setHoverImage(false)}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : (showImagePanel ? 'bg-blue-100 text-blue-600' : (hoverImage ? 'bg-gray-100 text-gray-700' : 'text-gray-600'))}`}
                 title="图片"
               >
                 <Image className="h-5 w-5" />
               </button>
               <button
-                onClick={() => { const next = !showDiscussion; setShowDiscussion(next); if (next) { setShowTranslation(false); setShowImagePanel(false); setShowVoicePanel(false) } }}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showDiscussion
-                    ? 'bg-blue-100 text-blue-600'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                onClick={() => { const next = !showDiscussion; setShowDiscussion(next) }}
+                onMouseEnter={() => setHoverDiscussion(true)}
+                onMouseLeave={() => setHoverDiscussion(false)}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showDiscussion ? 'bg-blue-100 text-blue-600' : (hoverDiscussion ? 'bg-gray-100 text-gray-700' : 'text-gray-600')}`}
                 title="讨论"
               >
                 <MessageSquare className="h-5 w-5" />
               </button>
             </div>
-            {showVoicePanel && (
+            {(showVoicePanel || hoverVoice) && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
 
                 <div>
@@ -1967,7 +1976,7 @@ export default function Reader() {
                 </div>
               </div>
             )}
-            {showImagePanel && (
+            {(showImagePanel || hoverImage) && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
                 <div className="mb-2 px-4 flex items-center justify-evenly">
                   <button onClick={handleImageGeneration} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title="执行绘图">
@@ -2039,7 +2048,7 @@ export default function Reader() {
                 )}
               </div>
             )}
-            {showTranslation && (
+            {(showTranslation || hoverTranslation) && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-blue-200 relative">
                 <div className="mb-2 px-4 flex items-center justify-evenly">
                   <button onClick={() => handleTranslation()} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isTranslating ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title="执行翻译">
@@ -2117,7 +2126,7 @@ export default function Reader() {
                 })()}
               </div>
             )}
-            {showDiscussion && (
+            {(showDiscussion || hoverDiscussion) && (
               <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 relative">
                 <div className="space-y-3">
                   <div className="flex items-center space-x-2">
