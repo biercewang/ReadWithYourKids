@@ -1740,39 +1740,6 @@ export default function Reader() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {mergedStart > 0 && (
-                      <div className="w-full">
-                        {mergedEnd > mergedStart ? (
-                          <div className="grid grid-cols-3 gap-1">
-                            <button
-                              onClick={() => { const ns = mergedStart + 1; setMergedStart(ns); ensureMergedData(ns, mergedEnd) }}
-                              className="col-span-1 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
-                              aria-label="缩小上方"
-                              title="缩小上方"
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => { const ns = mergedStart - 1; setMergedStart(ns); ensureMergedData(ns, mergedEnd) }}
-                              className="col-span-2 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
-                              aria-label="向上扩展"
-                              title="向上扩展"
-                            >
-                              <ChevronUp className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => { const ns = mergedStart - 1; setMergedStart(ns); ensureMergedData(ns, mergedEnd) }}
-                            className="w-full h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
-                            aria-label="向上扩展"
-                            title="向上扩展"
-                          >
-                            <ChevronUp className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    )}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
                       <div className="lg:col-span-12 relative space-y-2 px-6">
                         {(() => {
