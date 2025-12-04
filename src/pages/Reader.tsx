@@ -1999,76 +1999,43 @@ export default function Reader() {
                 </div>
               </div>
             )}
-            {(showImagePanel || hoverImage) && (
-              <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
-                <div className="mb-2 px-4 flex items-center justify-evenly">
-                  <button onClick={handleImageGeneration} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title="执行绘图">
-                    <Brush className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => setShowImageConfig(!showImageConfig)} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="设置">
-                    <Settings className="h-5 w-5" />
-                  </button>
+            {(showSettingsPanel || hoverSettings) && (
+              <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <Type className="h-5 w-5 text-slate-700" />
+                    <span className="text-sm font-medium text-slate-800">文字设置</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button onClick={() => { setReaderFontSize(16); try { localStorage.setItem('reader_font_size', '16') } catch { } }} className="px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">小</button>
+                    <button onClick={() => { setReaderFontSize(18); try { localStorage.setItem('reader_font_size', '18') } catch { } }} className="px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">中</button>
+                    <button onClick={() => { setReaderFontSize(22); try { localStorage.setItem('reader_font_size', '22') } catch { } }} className="px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">大</button>
+                  </div>
                 </div>
-                <div className="border border-slate-200 rounded-md p-3 mb-3">
-                  <label className="block text-slate-700 text-xs mb-1">提示词</label>
-                  <textarea
-                    value={imagePromptText}
-                    onChange={(e) => { setImagePromptText(e.target.value) }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    rows={5}
-                    placeholder="已填充选中文本，可直接编辑提示词"
-                  />
-                </div>
-                {showImageConfig && (
-                  <div className="border border-slate-200 rounded-md p-3 mb-3">
-                    <label className="block text-slate-700 text-xs mb-1">提示词模板</label>
-                    <textarea
-                      value={imagePromptTemplate}
-                      onChange={(e) => {
-                        setImagePromptTemplate(e.target.value)
-                        try { localStorage.setItem('image_prompt_template', e.target.value) } catch { }
-                      }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      rows={4}
-                      placeholder="使用 {paragraph} 占位符插入选中文本"
-                    />
-                    <div className="mt-3">
-                      <label className="block text-slate-700 text-xs mb-1">模型</label>
-                      <select
-                        value={imageModel}
-                        onChange={(e) => {
-                          setImageModel(e.target.value)
-                          try { localStorage.setItem('openrouter_image_model', e.target.value) } catch { }
-                        }}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white"
-                      >
-                        <option value="google/gemini-2.5-flash-image">google/gemini-2.5-flash-image</option>
-                        <option value="google/gemini-3-pro-image-preview">google/gemini-3-pro-image-preview</option>
-                      </select>
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-slate-700 text-xs mb-1">文字大小（{readerFontSize}px）</label>
+                    <input type="range" min={12} max={28} step={1} value={readerFontSize} onChange={(e) => { const v = parseInt(e.target.value, 10); setReaderFontSize(v); try { localStorage.setItem('reader_font_size', String(v)) } catch { } }} className="w-full" />
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 text-xs mb-1">字体</label>
+                    <select value={readerFontFamily} onChange={(e) => { const v = e.target.value; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white">
+                      <option value="system-ui">系统默认</option>
+                      <option value="serif">Serif</option>
+                      <option value="sans-serif">Sans-serif</option>
+                      <option value="monospace">Monospace</option>
+                      <option value="Georgia, serif">Georgia</option>
+                      <option value="'Times New Roman', serif">Times New Roman</option>
+                      <option value="Arial, sans-serif">Arial</option>
+                    </select>
+                  </div>
+                  <div className="border border-slate-200 rounded-md p-3 bg-slate-50">
+                    <div className="text-xs text-slate-600 mb-1">预览</div>
+                    <div className="text-slate-800" style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>
+                      这是一段示例文本，用于预览当前设置。
                     </div>
                   </div>
-                )}
-                <div className="mt-2 text-xs text-slate-700">
-                  {isGeneratingImage && <span>生成中...</span>}
-                  {!isGeneratingImage && imageStatus === 'success' && <span>绘图成功（模型: {imageModel}）</span>}
-                  {!isGeneratingImage && imageStatus === 'error' && <span className="text-red-700">绘图失败</span>}
                 </div>
-                {imageStatus === 'success' && lastImageUrl && (
-                  <div className="mt-3 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                    <img src={lastImageUrl} alt="最新生成预览" className="w-full object-contain" />
-                  </div>
-                )}
-                {imageDebug?.error && (
-                  <div className="mt-2 text-xs text-red-700">错误：{String(imageDebug.error)}</div>
-                )}
-                {imageDebug?.prompt && (
-                  <div className="mt-2">
-                    <div className="text-xs text-slate-600 mb-1">使用的提示词</div>
-                    <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-800 whitespace-pre-wrap break-words">
-                      {String(imageDebug.prompt)}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
             {(showTranslation || hoverTranslation) && (
@@ -2149,27 +2116,76 @@ export default function Reader() {
                 })()}
               </div>
             )}
-            {(showSettingsPanel || hoverSettings) && (
+            {(showImagePanel || hoverImage) && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-slate-700 text-xs mb-1">文字大小</label>
-                    <input type="range" min={12} max={28} step={1} value={readerFontSize} onChange={(e) => { const v = parseInt(e.target.value, 10); setReaderFontSize(v); try { localStorage.setItem('reader_font_size', String(v)) } catch { } }} className="w-full" />
-                    <div className="text-xs text-slate-600 mt-1">{readerFontSize}px</div>
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 text-xs mb-1">字体</label>
-                    <select value={readerFontFamily} onChange={(e) => { const v = e.target.value; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white">
-                      <option value="system-ui">系统默认</option>
-                      <option value="serif">Serif</option>
-                      <option value="sans-serif">Sans-serif</option>
-                      <option value="monospace">Monospace</option>
-                      <option value="Georgia, serif">Georgia</option>
-                      <option value="'Times New Roman', serif">Times New Roman</option>
-                      <option value="Arial, sans-serif">Arial</option>
-                    </select>
-                  </div>
+                <div className="mb-2 px-4 flex items-center justify-evenly">
+                  <button onClick={handleImageGeneration} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title="执行绘图">
+                    <Brush className="h-5 w-5" />
+                  </button>
+                  <button onClick={() => setShowImageConfig(!showImageConfig)} className="w-9 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200" title="设置">
+                    <Settings className="h-5 w-5" />
+                  </button>
                 </div>
+                <div className="border border-slate-200 rounded-md p-3 mb-3">
+                  <label className="block text-slate-700 text-xs mb-1">提示词</label>
+                  <textarea
+                    value={imagePromptText}
+                    onChange={(e) => { setImagePromptText(e.target.value) }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    rows={5}
+                    placeholder="已填充选中文本，可直接编辑提示词"
+                  />
+                </div>
+                {showImageConfig && (
+                  <div className="border border-slate-200 rounded-md p-3 mb-3">
+                    <label className="block text-slate-700 text-xs mb-1">提示词模板</label>
+                    <textarea
+                      value={imagePromptTemplate}
+                      onChange={(e) => {
+                        setImagePromptTemplate(e.target.value)
+                        try { localStorage.setItem('image_prompt_template', e.target.value) } catch { }
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      rows={4}
+                      placeholder="使用 {paragraph} 占位符插入选中文本"
+                    />
+                    <div className="mt-3">
+                      <label className="block text-slate-700 text-xs mb-1">模型</label>
+                      <select
+                        value={imageModel}
+                        onChange={(e) => {
+                          setImageModel(e.target.value)
+                          try { localStorage.setItem('openrouter_image_model', e.target.value) } catch { }
+                        }}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white"
+                      >
+                        <option value="google/gemini-2.5-flash-image">google/gemini-2.5-flash-image</option>
+                        <option value="google/gemini-3-pro-image-preview">google/gemini-3-pro-image-preview</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-2 text-xs text-slate-700">
+                  {isGeneratingImage && <span>生成中...</span>}
+                  {!isGeneratingImage && imageStatus === 'success' && <span>绘图成功（模型: {imageModel}）</span>}
+                  {!isGeneratingImage && imageStatus === 'error' && <span className="text-red-700">绘图失败</span>}
+                </div>
+                {imageStatus === 'success' && lastImageUrl && (
+                  <div className="mt-3 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                    <img src={lastImageUrl} alt="最新生成预览" className="w-full object-contain" />
+                  </div>
+                )}
+                {imageDebug?.error && (
+                  <div className="mt-2 text-xs text-red-700">错误：{String(imageDebug.error)}</div>
+                )}
+                {imageDebug?.prompt && (
+                  <div className="mt-2">
+                    <div className="text-xs text-slate-600 mb-1">使用的提示词</div>
+                    <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-800 whitespace-pre-wrap break-words">
+                      {String(imageDebug.prompt)}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {(showDiscussion || hoverDiscussion) && (
