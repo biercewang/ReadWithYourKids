@@ -1590,6 +1590,17 @@ export default function Reader() {
   }, [currentBook, currentChapter, currentParagraphIndex, mergedStart, mergedEnd])
 
   useEffect(() => {
+    const onBeforeUnload = () => { try { saveReadingStateLocal() } catch { } }
+    const onVisibility = () => { try { if (document.visibilityState === 'hidden') saveReadingStateLocal() } catch { } }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [currentBook, currentChapter, currentParagraphIndex, mergedStart, mergedEnd])
+
+  useEffect(() => {
     if (currentBook && currentChapter && paragraphs.length > 0) {
       try {
         const raw = localStorage.getItem('demo_notes')
