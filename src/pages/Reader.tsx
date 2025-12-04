@@ -727,6 +727,7 @@ export default function Reader() {
 
   const playLatestAudio = async () => {
     try {
+      stopPlaying()
       if (currentAudio) {
         try { currentAudio.pause(); currentAudio.currentTime = 0 } catch { }
         setCurrentAudio(null)
