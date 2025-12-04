@@ -1746,7 +1746,7 @@ export default function Reader() {
                           <div className="grid grid-cols-3 gap-1">
                             <button
                               onClick={() => { const ns = mergedStart + 1; setMergedStart(ns); ensureMergedData(ns, mergedEnd) }}
-                              className="col-span-1 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
+                              className="col-span-1 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
                               aria-label="缩小上方"
                               title="缩小上方"
                             >
@@ -1754,7 +1754,7 @@ export default function Reader() {
                             </button>
                             <button
                               onClick={() => { const ns = mergedStart - 1; setMergedStart(ns); ensureMergedData(ns, mergedEnd) }}
-                              className="col-span-2 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
+                              className="col-span-2 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
                               aria-label="向上扩展"
                               title="向上扩展"
                             >
@@ -1764,7 +1764,7 @@ export default function Reader() {
                         ) : (
                           <button
                             onClick={() => { const ns = mergedStart - 1; setMergedStart(ns); ensureMergedData(ns, mergedEnd) }}
-                            className="w-full h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
+                            className="w-full h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
                             aria-label="向上扩展"
                             title="向上扩展"
                           >
@@ -1788,7 +1788,7 @@ export default function Reader() {
                             const nList = mergedNotesMap[pid] || []
                             const aList = mergedAudiosMap[pid] || []
                             return (
-                              <div key={pid} className={`group w-full rounded-lg p-3 relative border border-slate-200`}>
+                              <div key={pid} className={`group w-full rounded-md p-3 relative border-y border-slate-200`}>
                             <div className="flex items-start">
                               <div className="flex-1 pr-2">
                                 <p className="text-lg leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words">{p.content}</p>
@@ -1827,12 +1827,12 @@ export default function Reader() {
                         })()}
                         <div ref={listBottomRef} />
                         { (currentParagraphIndex > 0 || mergedStart > 0) && (
-                          <button onClick={handlePreviousParagraph} aria-label="上一段" className="absolute left-0 top-1/2 -translate-y-1/2 w-6 h-12 rounded-md border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center">
+                          <button onClick={handlePreviousParagraph} aria-label="上一段" className="absolute left-0 top-0 bottom-0 w-6 bg-transparent text-slate-400 flex items-center justify-center hover:bg-slate-100 hover:rounded-md">
                             <ChevronLeft className="h-4 w-4" />
                           </button>
                         )}
                         { (currentParagraphIndex < paragraphs.length - 1 || mergedEnd < paragraphs.length - 1) && (
-                          <button onClick={handleNextParagraph} aria-label="下一段" className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-12 rounded-md border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center">
+                          <button onClick={handleNextParagraph} aria-label="下一段" className="absolute right-0 top-0 bottom-0 w-6 bg-transparent text-slate-400 flex items-center justify-center hover:bg-slate-100 hover:rounded-md">
                             <ChevronRight className="h-4 w-4" />
                           </button>
                         )}
@@ -1844,7 +1844,7 @@ export default function Reader() {
                           <div className="grid grid-cols-3 gap-1">
                             <button
                               onClick={() => { const ne = Math.max(mergedStart, mergedEnd - 1); setMergedEnd(ne); ensureMergedData(mergedStart, ne) }}
-                              className="col-span-1 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
+                              className="col-span-1 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
                               aria-label="缩小下方"
                               title="缩小下方"
                             >
@@ -1852,7 +1852,7 @@ export default function Reader() {
                             </button>
                             <button
                               onClick={extendDown}
-                              className="col-span-2 h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
+                              className="col-span-2 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
                               aria-label="向下扩展"
                               title="向下扩展"
                             >
@@ -1862,7 +1862,7 @@ export default function Reader() {
                         ) : (
                           <button
                             onClick={extendDown}
-                            className="w-full h-6 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded-md flex items-center justify-center"
+                            className="w-full h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
                             aria-label="向下扩展"
                             title="向下扩展"
                           >
