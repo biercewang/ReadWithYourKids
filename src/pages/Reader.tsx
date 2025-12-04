@@ -286,6 +286,7 @@ export default function Reader() {
 
   const ensureMergedData = async (startIdx: number, endIdx: number) => {
     if (!currentBook || paragraphs.length === 0) return
+    setLoadingProgress(v => (v <= 0 ? 10 : v))
     const bid = getBookKey()
     const slice = paragraphs.slice(startIdx, endIdx + 1)
     const newImages: Record<string, ImgType[]> = { ...mergedImagesMap }
@@ -440,6 +441,16 @@ export default function Reader() {
           setIsParagraphsLoading(false)
         } else {
           setIsParagraphsLoading(true)
+          // Try local cache first to show partial content quickly
+          try {
+            const raw = localStorage.getItem('demo_paragraphs')
+            if (raw && currentBook) {
+              const all = JSON.parse(raw)
+              const bookMap = all[currentBook.id] || {}
+              const list = bookMap[ch.id] || []
+              if (list && list.length > 0) setParagraphs(list)
+            }
+          } catch { }
           fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
         }
       } else {
@@ -1630,7 +1641,7 @@ export default function Reader() {
           <div className="lg:col-span-3">
             <div className="bg-white rounded-lg shadow-md p-8 mb-6 w-full">
               <div className="w-full">
-                {isParagraphsLoading ? (
+                {isParagraphsLoading && paragraphs.length === 0 ? (
                   <div className="text-center text-gray-600 py-12">
                     <div>读取中... {Math.round(Math.max(0, Math.min(100, loadingProgress)))}%</div>
                     <div className="w-64 h-2 bg-slate-200 rounded mx-auto mt-3">
@@ -1643,6 +1654,12 @@ export default function Reader() {
                   </div>
                 ) : (
                   <div className="space-y-2">
+                    {(isParagraphsLoading || loadingProgress < 100) && (
+                      <div className="mb-2 text-xs text-slate-600 flex items-center gap-2">
+                        <span>正在加载更多内容...</span>
+                        <span>{Math.round(Math.max(0, Math.min(100, loadingProgress)))}%</span>
+                      </div>
+                    )}
                     {mergedStart > 0 && (
                       <div className="w-full">
                         {mergedEnd > mergedStart ? (
