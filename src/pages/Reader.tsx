@@ -136,6 +136,49 @@ export default function Reader() {
   const [isParagraphsLoading, setIsParagraphsLoading] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState<number>(0)
   const [preloadedParas, setPreloadedParas] = useState<Record<string, any[]>>({})
+
+  const preloadNextParagraphContent = async () => {
+    try {
+      if (!currentBook || !currentChapter || paragraphs.length === 0) return
+      const nextIndex = Math.min(paragraphs.length - 1, currentParagraphIndex + 1)
+      if (nextIndex === currentParagraphIndex) return
+      const nextPid = getParagraphId(paragraphs[nextIndex])
+      const nextText = paragraphs[nextIndex]?.content || ''
+      const bid = getBookKey()
+      // Pre-generate TTS audio for next paragraph
+      if (showVoicePanel && !isTtsPending) {
+        const existing = (mergedAudiosMap[nextPid] || [])
+        if (!existing || existing.length === 0) {
+          try {
+            const { audioUrl, raw } = await ttsWithDoubaoHttp(nextText, {
+              voice_type: ttsVoiceType,
+              language: ttsLanguage || undefined,
+              speed_ratio: ttsSpeed,
+              volume_ratio: ttsVolume,
+              pitch_ratio: ttsPitch,
+              encoding: 'mp3'
+            })
+            addAudio(bid, currentChapter.id, nextPid, audioUrl, 'doubao', (raw as any)?._voice_type || ttsVoiceType)
+          } catch { }
+        }
+      }
+      // Pre-translate next paragraph
+      if (showTranslation && !isTranslating) {
+        const existingT = (mergedTranslationsMap[nextPid] || '')
+        if (!existingT || existingT.length === 0) {
+          try {
+            const full = translationProvider === 'openrouter'
+              ? await translateWithOpenRouter(nextText, 'zh', translationOpenRouterModel)
+              : await translateWithGemini(nextText, 'zh')
+            if (full && full.length > 0) {
+              setMergedTranslationsMap(prev => ({ ...prev, [nextPid]: full }))
+              addTranslation(bid, nextPid, full, 'zh')
+            }
+          } catch { }
+        }
+      }
+    } catch { }
+  }
   const [supabaseDown, setSupabaseDown] = useState(false)
   const [cloudOnly, setCloudOnly] = useState<boolean>(() => {
     try { return localStorage.getItem('cloud_only') === '1' } catch { return false }
@@ -510,6 +553,10 @@ export default function Reader() {
       preloadNextChapter()
     }
   }, [currentChapter, paragraphs])
+
+  useEffect(() => {
+    preloadNextParagraphContent()
+  }, [showVoicePanel, showTranslation, currentParagraphIndex, paragraphs])
 
   useEffect(() => {
     if (!user) {
