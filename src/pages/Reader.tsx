@@ -135,6 +135,7 @@ export default function Reader() {
   const [showImageConfig, setShowImageConfig] = useState(false)
   const [isParagraphsLoading, setIsParagraphsLoading] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState<number>(0)
+  const [preloadedParas, setPreloadedParas] = useState<Record<string, any[]>>({})
   const [supabaseDown, setSupabaseDown] = useState(false)
   const [cloudOnly, setCloudOnly] = useState<boolean>(() => {
     try { return localStorage.getItem('cloud_only') === '1' } catch { return false }
@@ -432,8 +433,15 @@ export default function Reader() {
       setCurrentParagraphIndex(0)
       setShowTranslation(false)
       if (isSupabaseConfigured && currentBook) {
-        setIsParagraphsLoading(true)
-        fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
+        const cached = preloadedParas[ch.id]
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+          setIsParagraphsLoading(true)
+          setParagraphs(cached)
+          setIsParagraphsLoading(false)
+        } else {
+          setIsParagraphsLoading(true)
+          fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
+        }
       } else {
         setIsParagraphsLoading(true)
         try {
@@ -449,6 +457,43 @@ export default function Reader() {
       }
     }
   }
+
+  const preloadNextChapter = async () => {
+    if (!chapters || chapters.length === 0 || !currentChapter) return
+    const idx = chapters.findIndex(c => c.id === currentChapter.id)
+    if (idx >= 0 && idx < chapters.length - 1) {
+      const next = chapters[idx + 1]
+      if (preloadedParas[next.id] && Array.isArray(preloadedParas[next.id]) && preloadedParas[next.id].length > 0) return
+      if (isSupabaseConfigured && supabase && (!supabaseDown || cloudOnly) && currentBook) {
+        try {
+          const { data } = await supabase
+            .from('paragraphs')
+            .select('*')
+            .eq('chapter_id', next.id)
+            .order('order_index', { ascending: true })
+          if (data && Array.isArray(data) && data.length > 0) {
+            setPreloadedParas(prev => ({ ...prev, [next.id]: data }))
+          }
+        } catch { }
+      } else {
+        try {
+          const raw = localStorage.getItem('demo_paragraphs')
+          if (raw && currentBook) {
+            const all = JSON.parse(raw)
+            const bookMap = all[currentBook.id] || {}
+            const list = bookMap[next.id] || []
+            if (list && list.length > 0) setPreloadedParas(prev => ({ ...prev, [next.id]: list }))
+          }
+        } catch { }
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (currentChapter && paragraphs.length > 0) {
+      preloadNextChapter()
+    }
+  }, [currentChapter, paragraphs])
 
   useEffect(() => {
     if (!user) {
