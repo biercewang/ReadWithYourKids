@@ -351,11 +351,16 @@ export default function Reader() {
         const bookAud = mapAud[bid] || {}
         for (const p of slice) {
           const pid = getParagraphId(p)
-          newImages[pid] = bookImg[pid] || []
-          newTrans[pid] = bookTrans[pid] || ''
-          newNotes[pid] = bookNotes[pid] || []
+          newImages[pid] = bookImg[pid] || (newImages[pid] || [])
+          const cachedTrans = bookTrans[pid]
+          if (typeof cachedTrans === 'string' && cachedTrans.length > 0) {
+            newTrans[pid] = cachedTrans
+          } else {
+            newTrans[pid] = typeof newTrans[pid] === 'string' ? newTrans[pid] : ''
+          }
+          newNotes[pid] = bookNotes[pid] || (newNotes[pid] || [])
           const list = bookAud[pid] || []
-          newAud[pid] = list.map((a: any) => ({ id: a.id, audio_url: a.audio_url }))
+          newAud[pid] = list.length > 0 ? list.map((a: any) => ({ id: a.id, audio_url: a.audio_url })) : (newAud[pid] || [])
         }
       } catch { }
     }
@@ -1650,7 +1655,7 @@ export default function Reader() {
                   </div>
                 ) : paragraphs.length === 0 ? (
                   <div className="text-center text-gray-600 py-12">
-                    该图书尚未解析到段落，请返回首页重新上传以解析章节。
+                    正在准备内容，请稍候...
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1784,6 +1789,11 @@ export default function Reader() {
                             <ChevronDown className="h-4 w-4" />
                           </button>
                         )}
+                      </div>
+                    )}
+                    {(paragraphs.length > 0) && (isParagraphsLoading || loadingProgress < 100) && (
+                      <div className="mt-3 text-xs text-slate-600 text-center">
+                        正在加载更多内容... {Math.round(Math.max(0, Math.min(100, loadingProgress)))}%
                       </div>
                     )}
                   </div>
