@@ -1408,8 +1408,12 @@ export default function Reader() {
       } catch { }
       try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech(vis) } } catch { }
       try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
-    } else if (paragraphs.length <= 1) {
-      handleNextChapter()
+    } else {
+      const hasNextChapter = !!currentChapter && !!chapters && chapters.length > 0 && (chapters.findIndex(c => c.id === currentChapter.id) < chapters.length - 1)
+      if (hasNextChapter) {
+        const go = window.confirm('已到本章最后一段，是否进入下一章？')
+        if (go) handleNextChapter()
+      }
     }
   }
 
@@ -1659,12 +1663,6 @@ export default function Reader() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {(isParagraphsLoading || loadingProgress < 100) && (
-                      <div className="mb-2 text-xs text-slate-600 flex items-center gap-2">
-                        <span>正在加载更多内容...</span>
-                        <span>{Math.round(Math.max(0, Math.min(100, loadingProgress)))}%</span>
-                      </div>
-                    )}
                     {mergedStart > 0 && (
                       <div className="w-full">
                         {mergedEnd > mergedStart ? (
