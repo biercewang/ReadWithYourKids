@@ -2191,46 +2191,6 @@ export default function Reader() {
             {(showDiscussion || hoverDiscussion) && (
               <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 relative">
                 <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <button onClick={startStreamingAsr} disabled={isRecording} className={`px-3 py-2 rounded-md text-sm ${isRecording ? 'bg-slate-200 text-slate-500' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>流式识别</button>
-                    <button onClick={stopStreamingAsr} disabled={!isRecording} className={`px-3 py-2 rounded-md text-sm ${!isRecording ? 'bg-slate-200 text-slate-500' : 'bg-indigo-100 text-indigo-800 hover:bg-indigo-200'}`}>结束流式</button>
-                    <button onClick={() => setShowAsrDebug(!showAsrDebug)} className="px-2 h-9 inline-flex items-center justify-center rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs">调试</button>
-                  </div>
-                  <div className="text-xs text-slate-700 mt-2">
-                    {isRecording ? '流式识别中...' : '未连接'}
-                    {asrStatus === 'error' && <span className="text-red-700">（发生错误）</span>}
-                  </div>
-                  <div className="border border-slate-300 rounded-md bg-white h-16 overflow-hidden">
-                    <canvas ref={recCanvasRef} className="w-full h-16" />
-                  </div>
-                  <div className="border border-slate-200 rounded-md p-2 bg-white text-sm text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
-                    {recordTranscript && recordTranscript.length > 0 ? recordTranscript : <span className="text-slate-400">录音识别内容将显示在此</span>}
-                  </div>
-                  {showAsrDebug && (
-                    <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-700">
-                      <div>状态：{asrStatus}</div>
-                      <div>WS地址：{String(asrDebug?.ws_url || '')}</div>
-                      <div>WS就绪状态：{String(asrDebug?.ws_ready_state ?? '')}</div>
-                      <div>连接ID：{String(asrDebug?.connect_id || '')}</div>
-                      <div>请求ID：{String(asrDebug?.req_id || '')}</div>
-                      <div>AppID：{String(asrDebug?.app_id || '')}</div>
-                      
-                      <div>集群：{String(asrDebug?.cluster || '')}</div>
-                      <div>客户端请求长度：{String(asrDebug?.client_request_len ?? '')}</div>
-                      <div>已发送音频包：{String(asrDebug?.audio_packets_sent ?? '')}</div>
-                      <div>最后包大小：{String(asrDebug?.last_packet_size ?? '')}</div>
-                      <div>最后消息类型：{String(asrDebug?.last_msg_type ?? '')}</div>
-                      <div>最后消息载荷长度：{String(asrDebug?.last_payload_len ?? '')}</div>
-                      <div>停止点击时间：{String(asrDebug?.stop_click_at ?? '')}</div>
-                      <div>已发送最后包：{String(asrDebug?.final_packet_sent ? '是' : '否')}</div>
-                      <div>音频DataURL长度：{String(asrDebug?.dataUrl_len || '')}</div>
-                      <div>识别返回：{asrDebug?.response ? JSON.stringify(asrDebug.response) : '无'}</div>
-                      {asrDebug?.ws_close && <div>WS关闭：{JSON.stringify(asrDebug.ws_close)}</div>}
-                      {asrDebug?.ws_error_frame && <div className="text-red-700">服务端错误帧：{JSON.stringify(asrDebug.ws_error_frame)}</div>}
-                      {asrDebug?.ws_error && <div className="text-red-700">WS错误：{String(asrDebug.ws_error)}</div>}
-                      {asrDebug?.error && <div className="text-red-700">错误：{String(asrDebug.error)}</div>}
-                    </div>
-                  )}
                   <textarea value={noteInput} onChange={(e) => setNoteInput(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="记录交流内容" />
                   <div className="flex space-x-2">
                     <button onClick={() => setRole('parent')} className={`flex-1 px-3 py-2 rounded-md text-sm ${currentRole === 'parent' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>家长</button>
@@ -2239,9 +2199,9 @@ export default function Reader() {
                   <div className="flex justify-end">
                     <button onClick={() => { if (currentBook && currentChapter) { const bid = getBookKey(); const runIds = (selectedIds.length > 0 ? selectedIds : [getCurrentParagraphId()]); if (noteInput.trim()) { runIds.forEach(pid => { if (pid) { addNote(bid, currentChapter.id, pid, noteInput.trim()) } }); setNoteInput(''); ensureMergedData(mergedStart, mergedEnd) } } }} className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 text-sm">添加对话</button>
                   </div>
-                    </div>
-                  </div>
-                )}
+                </div>
+              </div>
+            )}
               </div>
               {/* 移除整体容器右侧按钮，改为每段内贴边展示 */}
             </div>
