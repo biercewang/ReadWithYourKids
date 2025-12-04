@@ -1696,20 +1696,7 @@ export default function Reader() {
                   <option key={c.id} value={c.id}>{c.title}</option>
                 ))}
               </select>
-              <button
-                onClick={handlePrevChapter}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-                disabled={!currentChapter || (chapters.findIndex(c => c.id === currentChapter.id) <= 0)}
-              >
-                <ChevronUp className="h-4 w-4" />
-              </button>
-              <button
-                onClick={handleNextChapter}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-                disabled={!currentChapter || (chapters.findIndex(c => c.id === currentChapter.id) >= chapters.length - 1)}
-              >
-                <ChevronDown className="h-4 w-4" />
-              </button>
+              {/* 章切换按钮已移除 */}
               <select
                 value={String(currentParagraphIndex + 1)}
                 onChange={(e) => {
@@ -1724,20 +1711,7 @@ export default function Reader() {
                   <option key={i} value={String(i + 1)}>{i + 1}</option>
                 ))}
               </select>
-              <button
-                onClick={handlePreviousParagraph}
-                disabled={currentParagraphIndex === 0 && (!currentChapter || (chapters.findIndex(c => c.id === currentChapter.id) <= 0))}
-                className="inline-flex items-center justify-center w-9 h-9 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={handleNextParagraph}
-                disabled={(currentParagraphIndex >= paragraphs.length - 1) && (!currentChapter || (chapters.findIndex(c => c.id === currentChapter.id) >= chapters.length - 1))}
-                className="inline-flex items-center justify-center w-9 h-9 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              {/* 段落切换按钮移至阅读区右侧 */}
 
               {/* 操作按钮已移至内容区域上方的独立容器 */}
             </div>
@@ -1749,7 +1723,7 @@ export default function Reader() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Main Reading Area */}
           <div className="lg:col-span-3">
-            <div className="bg-white rounded-lg shadow-md p-8 mb-6 w-full">
+            <div className="bg-white rounded-lg shadow-md p-8 mb-6 w-full relative">
               <div className="w-full">
                 {isParagraphsLoading && paragraphs.length === 0 ? (
                   <div className="text-center text-gray-600 py-12">
@@ -2220,12 +2194,31 @@ export default function Reader() {
                   <div className="flex justify-end">
                     <button onClick={() => { if (currentBook && currentChapter) { const bid = getBookKey(); const runIds = (selectedIds.length > 0 ? selectedIds : [getCurrentParagraphId()]); if (noteInput.trim()) { runIds.forEach(pid => { if (pid) { addNote(bid, currentChapter.id, pid, noteInput.trim()) } }); setNoteInput(''); ensureMergedData(mergedStart, mergedEnd) } } }} className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 text-sm">添加对话</button>
                   </div>
-                </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+              {/* 阅读区右侧窄条段落切换按钮：上-下一段，下-上一段 */}
+              { (currentParagraphIndex < paragraphs.length - 1 || mergedEnd < paragraphs.length - 1) && (
+                <button
+                  onClick={handleNextParagraph}
+                  aria-label="下一段"
+                  className="absolute right-2 top-2 w-6 h-6 rounded-md border border-slate-200 bg-white/60 text-slate-400 hover:bg-slate-100 flex items-center justify-center"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              )}
+              { (currentParagraphIndex > 0 || mergedStart > 0) && (
+                <button
+                  onClick={handlePreviousParagraph}
+                  aria-label="上一段"
+                  className="absolute right-2 bottom-2 w-6 h-6 rounded-md border border-slate-200 bg-white/60 text-slate-400 hover:bg-slate-100 flex items-center justify-center"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
     </div>
   )
 }
