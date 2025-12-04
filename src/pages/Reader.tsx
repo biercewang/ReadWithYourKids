@@ -1715,6 +1715,25 @@ export default function Reader() {
 
               {/* 操作按钮已移至内容区域上方的独立容器 */}
             </div>
+            {/* 阅读窗口外侧右侧：上为“下一段”，下为“上一段”，贴边显示 */}
+            { (currentParagraphIndex < paragraphs.length - 1 || mergedEnd < paragraphs.length - 1) && (
+              <button
+                onClick={handleNextParagraph}
+                aria-label="下一段"
+                className="absolute -right-4 top-8 w-6 h-6 rounded-md border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center z-10"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+            { (currentParagraphIndex > 0 || mergedStart > 0) && (
+              <button
+                onClick={handlePreviousParagraph}
+                aria-label="上一段"
+                className="absolute -right-4 bottom-8 w-6 h-6 rounded-md border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center z-10"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -1797,15 +1816,15 @@ export default function Reader() {
                                     aria-label="选择段落"
                                   />
                                 </div>
-                                <p className="text-lg leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words">{p.content}</p>
-                                {tText && (
-                                  <div className="mt-2 bg-blue-50 border border-blue-200 rounded-md p-2 text-sm text-blue-900 whitespace-pre-wrap break-words">{tText}</div>
-                                )}
-                                {imgUrl && (
-                                  <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                                    <img src={imgUrl} alt="插画" className="w-full object-contain" />
-                                  </div>
-                                )}
+                            <p className="text-lg leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words">{p.content}</p>
+                            {tText && (
+                              <div className="mt-2 bg-blue-50 border border-blue-200 rounded-md p-2 text-sm text-blue-900 whitespace-pre-wrap break-words">{tText}</div>
+                            )}
+                            {imgUrl && (
+                              <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                                <img src={imgUrl} alt="插画" className="w-full object-contain" />
+                              </div>
+                            )}
                                 {nList.length > 0 && (
                                   <div className="mt-2 space-y-1">
                                     {nList.map(n => (
@@ -1822,9 +1841,10 @@ export default function Reader() {
                                 {aList.length > 0 && (
                                   <div className="mt-2">
                                     <button onClick={() => { const url = aList[0]?.audio_url || ''; if (url) { const audio = new Audio(url); audio.play() } }} className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700">播放语音</button>
-                                  </div>
-                                )}
                               </div>
+                            )}
+                            {/* 段落卡片内不放左右按钮 */}
+                          </div>
                             )
                           })
                         })()}
@@ -2198,25 +2218,7 @@ export default function Reader() {
                   </div>
                 )}
               </div>
-              {/* 阅读区右侧窄条段落切换按钮：上-下一段，下-上一段 */}
-              { (currentParagraphIndex < paragraphs.length - 1 || mergedEnd < paragraphs.length - 1) && (
-                <button
-                  onClick={handleNextParagraph}
-                  aria-label="下一段"
-                  className="absolute right-2 top-2 w-6 h-6 rounded-md border border-slate-200 bg-white/60 text-slate-400 hover:bg-slate-100 flex items-center justify-center"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              )}
-              { (currentParagraphIndex > 0 || mergedStart > 0) && (
-                <button
-                  onClick={handlePreviousParagraph}
-                  aria-label="上一段"
-                  className="absolute right-2 bottom-2 w-6 h-6 rounded-md border border-slate-200 bg-white/60 text-slate-400 hover:bg-slate-100 flex items-center justify-center"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-              )}
+              {/* 移除整体容器右侧按钮，改为每段内贴边展示 */}
             </div>
           </div>
     </div>
