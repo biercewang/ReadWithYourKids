@@ -788,7 +788,6 @@ export default function Reader() {
     const next = !showVoicePanel
     setShowVoicePanel(next)
     if (next) {
-      setShowTranslation(false)
       setShowImagePanel(false)
       setShowDiscussion(false)
       stopPlaying()
@@ -1852,14 +1851,14 @@ export default function Reader() {
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-4 py-2 flex items-center justify-evenly w-full">
               <button
-                onClick={() => { const next = !showVoicePanel; setShowVoicePanel(next); if (next) { setShowTranslation(false); setShowImagePanel(false); setShowDiscussion(false) } }}
+                onClick={async () => { const next = !showVoicePanel; setShowVoicePanel(next); if (next) { setShowImagePanel(false); setShowDiscussion(false); stopPlaying(); await handleTextToSpeech() } }}
                 className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isPlaying ? 'bg-blue-100 text-blue-600 animate-pulse' : (showVoicePanel ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')}`}
                 title="语音"
               >
                 <Volume2 className="h-5 w-5" />
               </button>
               <button
-                onClick={() => { const next = !showTranslation; setShowTranslation(next); if (next) { setShowImagePanel(false); setShowDiscussion(false); setShowVoicePanel(false) } }}
+                onClick={() => { const next = !showTranslation; setShowTranslation(next); if (next) { setShowImagePanel(false); setShowDiscussion(false); handleTranslation() } }}
                 className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showTranslation ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 title="翻译"
               >
