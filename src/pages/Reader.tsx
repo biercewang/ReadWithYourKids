@@ -136,11 +136,19 @@ export default function Reader() {
   const [isParagraphsLoading, setIsParagraphsLoading] = useState(false)
   const [loadingProgress, setLoadingProgress] = useState<number>(0)
   const [preloadedParas, setPreloadedParas] = useState<Record<string, any[]>>({})
+  const ttsPreloadingRef = useRef<Set<string>>(new Set())
+  const transPreloadingRef = useRef<Set<string>>(new Set())
+  const prefetchEnabled = (() => { try { const env = ((import.meta as any)?.env?.VITE_PREFETCH_ENABLED === '1'); const ls = typeof localStorage !== 'undefined' && localStorage.getItem('prefetch_enabled') === '1'; return env || ls } catch { return true } })()
+  const pageSizeDefault = (() => { try { const env = parseInt(((import.meta as any)?.env?.VITE_PAGE_SIZE as string) || '') || 50; const ls = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('page_size') || '' : '')) || 0; return Math.max(10, ls || env || 50) } catch { return 50 } })()
+  const [pageSize] = useState<number>(pageSizeDefault)
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const visibleLimit = Math.min(paragraphs.length, pageSize * currentPage)
 
   const preloadNextParagraphContent = async () => {
     try {
       if (!currentBook || !currentChapter || paragraphs.length === 0) return
-      const nextIndex = Math.min(paragraphs.length - 1, currentParagraphIndex + 1)
+      if (!prefetchEnabled) return
+      const nextIndex = Math.min(visibleLimit - 1, currentParagraphIndex + 1)
       if (nextIndex === currentParagraphIndex) return
       const nextPid = getParagraphId(paragraphs[nextIndex])
       const nextText = paragraphs[nextIndex]?.content || ''
@@ -148,7 +156,8 @@ export default function Reader() {
       // Pre-generate TTS audio for next paragraph
       if (showVoicePanel && !isTtsPending) {
         const existing = (mergedAudiosMap[nextPid] || [])
-        if (!existing || existing.length === 0) {
+        if ((!existing || existing.length === 0) && !ttsPreloadingRef.current.has(nextPid)) {
+          ttsPreloadingRef.current.add(nextPid)
           try {
             const { audioUrl, raw } = await ttsWithDoubaoHttp(nextText, {
               voice_type: ttsVoiceType,
@@ -159,13 +168,16 @@ export default function Reader() {
               encoding: 'mp3'
             })
             addAudio(bid, currentChapter.id, nextPid, audioUrl, 'doubao', (raw as any)?._voice_type || ttsVoiceType)
-          } catch { }
+            setMergedAudiosMap(prev => ({ ...prev, [nextPid]: [ { id: `local-${Date.now()}`, audio_url: audioUrl }, ...((prev[nextPid] || [])) ] }))
+          } catch { } finally { ttsPreloadingRef.current.delete(nextPid) }
         }
       }
       // Pre-translate next paragraph
       if (showTranslation && !isTranslating) {
-        const existingT = (mergedTranslationsMap[nextPid] || '')
-        if (!existingT || existingT.length === 0) {
+        const storeText = (translations || []).find(t => t.paragraph_id === nextPid)?.translated_text || ''
+        const existingT = mergedTranslationsMap[nextPid] || storeText
+        if ((!existingT || existingT.length === 0) && !transPreloadingRef.current.has(nextPid)) {
+          transPreloadingRef.current.add(nextPid)
           try {
             const full = translationProvider === 'openrouter'
               ? await translateWithOpenRouter(nextText, 'zh', translationOpenRouterModel)
@@ -174,10 +186,32 @@ export default function Reader() {
               setMergedTranslationsMap(prev => ({ ...prev, [nextPid]: full }))
               addTranslation(bid, nextPid, full, 'zh')
             }
-          } catch { }
+          } catch { } finally { transPreloadingRef.current.delete(nextPid) }
         }
       }
     } catch { }
+  }
+
+  const tryPlayPreloaded = async (pid?: string) => {
+    try {
+      const targetId = pid || getCurrentParagraphId()
+      if (!targetId) { await handleTextToSpeech(); return }
+      const list = mergedAudiosMap[targetId] || []
+      const url = list[0]?.audio_url || ''
+      if (url) {
+        stopPlaying()
+        const audio = new Audio(url)
+        audio.onended = () => { try { setCurrentAudio(null); setIsPlaying(false) } catch { } }
+        setCurrentAudio(audio)
+        setIsPlaying(true)
+        setTtsStatus('success')
+        setTtsSource('doubao')
+        setLastTtsModel(ttsVoiceType)
+        await audio.play()
+        return
+      }
+      await handleTextToSpeech([targetId])
+    } catch { await handleTextToSpeech(pid ? [pid] : undefined) }
   }
   const [supabaseDown, setSupabaseDown] = useState(false)
   const [cloudOnly, setCloudOnly] = useState<boolean>(() => {
@@ -314,7 +348,7 @@ export default function Reader() {
 
   const getOrderedSelectedIds = () => {
     if ((selectedIds || []).length === 0) return [getCurrentParagraphId()]
-    const order = paragraphs.map(p => getParagraphId(p))
+    const order = paragraphs.slice(0, visibleLimit).map(p => getParagraphId(p))
     const set = new Set(selectedIds)
     return order.filter(id => set.has(id))
   }
@@ -331,7 +365,7 @@ export default function Reader() {
     if (!currentBook || paragraphs.length === 0) return
     setLoadingProgress(v => (v <= 0 ? 10 : v))
     const bid = getBookKey()
-    const slice = paragraphs.slice(startIdx, endIdx + 1)
+    const slice = paragraphs.slice(startIdx, Math.min(endIdx + 1, visibleLimit))
     const newImages: Record<string, ImgType[]> = { ...mergedImagesMap }
     const newTrans: Record<string, string> = { ...mergedTranslationsMap }
     const newNotes: Record<string, Note[]> = { ...mergedNotesMap }
@@ -445,6 +479,24 @@ export default function Reader() {
       } catch { }
     }
   }, [showImagePanel, selectedIds, paragraphs, imagePromptTemplate])
+
+  useEffect(() => {
+    try {
+      const el = listBottomRef.current
+      if (!el) return
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            if (visibleLimit < paragraphs.length) {
+              setCurrentPage(p => p + 1)
+            }
+          }
+        }
+      }, { root: null, threshold: 0.5 })
+      io.observe(el)
+      return () => { try { io.disconnect() } catch {} }
+    } catch {}
+  }, [listBottomRef, paragraphs, visibleLimit])
 
   const handlePrevChapter = () => {
     if (!chapters || chapters.length === 0 || !currentChapter) return
@@ -704,6 +756,7 @@ export default function Reader() {
       setIsTtsPending(false)
       setCurrentAudio(audio)
       await audio.play()
+      try { preloadNextParagraphContent() } catch { }
     } catch (e) {
       setIsTtsPending(false)
       setTtsDebug({ error: e instanceof Error ? e.message : String(e) })
@@ -717,6 +770,7 @@ export default function Reader() {
         speechSynthesis.speak(utterance)
         setTtsStatus('fallback')
         setTtsSource('browser')
+        try { preloadNextParagraphContent() } catch { }
       } else {
         alert(e instanceof Error ? e.message : '朗读失败')
         setTtsStatus('error')
@@ -791,8 +845,8 @@ export default function Reader() {
     if (next) {
       setShowImagePanel(false)
       setShowDiscussion(false)
-      stopPlaying()
-      await handleTextToSpeech()
+      await tryPlayPreloaded(getCurrentParagraphId())
+      try { preloadNextParagraphContent() } catch { }
     }
   }
 
@@ -1390,7 +1444,7 @@ export default function Reader() {
           .map(pp => getParagraphId(pp))
         setSelectedIds(vis)
       } catch { }
-      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech(vis) } } catch { }
+      try { if (showVoicePanel && !isTtsPending) { await tryPlayPreloaded(vis[0]) } } catch { }
       try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
       return
     }
@@ -1409,7 +1463,7 @@ export default function Reader() {
           .map(pp => getParagraphId(pp))
         setSelectedIds(vis)
       } catch { }
-      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech(vis) } } catch { }
+      try { if (showVoicePanel && !isTtsPending) { await tryPlayPreloaded(vis[0]) } } catch { }
       try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
     } else if (paragraphs.length <= 1) {
       handlePrevChapter()
@@ -1434,7 +1488,7 @@ export default function Reader() {
           .map(pp => getParagraphId(pp))
         setSelectedIds(vis)
       } catch { }
-      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech(vis) } } catch { }
+      try { if (showVoicePanel && !isTtsPending) { await tryPlayPreloaded(vis[0]) } } catch { }
       try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
       return
     }
@@ -1453,7 +1507,7 @@ export default function Reader() {
           .map(pp => getParagraphId(pp))
         setSelectedIds(vis)
       } catch { }
-      try { if (showVoicePanel && !isTtsPending) { stopPlaying(); await handleTextToSpeech(vis) } } catch { }
+      try { if (showVoicePanel && !isTtsPending) { await tryPlayPreloaded(vis[0]) } } catch { }
       try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
     } else {
       const hasNextChapter = !!currentChapter && !!chapters && chapters.length > 0 && (chapters.findIndex(c => c.id === currentChapter.id) < chapters.length - 1)
@@ -1518,7 +1572,7 @@ export default function Reader() {
   useEffect(() => {
     try {
       const vis = paragraphs
-        .slice(mergedStart, Math.min(mergedEnd + 1, paragraphs.length))
+        .slice(mergedStart, Math.min(mergedEnd + 1, visibleLimit))
         .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
         .map(pp => getParagraphId(pp))
       setSelectedIds(prev => prev.filter(id => vis.includes(id)))
@@ -1747,7 +1801,7 @@ export default function Reader() {
                       <div className="lg:col-span-12 space-y-2">
                         {(() => {
                           const list = paragraphs
-                            .slice(mergedStart, Math.min(mergedEnd + 1, paragraphs.length))
+                            .slice(mergedStart, Math.min(mergedEnd + 1, visibleLimit))
                             .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
                           const visibleCount = list.length
                           return list.map((p) => {
