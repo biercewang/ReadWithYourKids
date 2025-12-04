@@ -1554,7 +1554,6 @@ export default function Reader() {
         setCurrentParagraphIndex(s)
         setAppliedSavedMerge(true)
         setMergedImagesMap({})
-        setMergedTranslationsMap({})
         setMergedNotesMap({})
         setHiddenMergedIds([])
         setDeleteMenuPid(null)
