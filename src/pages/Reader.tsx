@@ -6,7 +6,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { translateAuto, translateStreamAuto, translateWithOpenRouter, translateWithOpenRouterStream, translateWithGemini, translateWithGeminiStream, generateImageWithOpenRouter, ttsWithDoubaoHttp, recognizeWithDoubaoFileStandard, recognizeWithDoubaoFile } from '../lib/ai'
 import { useImagesStore } from '../store/images'
 import { useAudiosStore } from '../store/audios'
-import { Volume2, Languages, Image, MessageSquare, BookOpen, ArrowLeft, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, MoreVertical, Info, Play, Square, Settings, RefreshCw, Brush } from 'lucide-react'
+import { Volume2, Languages, Image, MessageSquare, BookOpen, ArrowLeft, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, MoreVertical, Info, Play, Square, Settings, RefreshCw, Brush, Type } from 'lucide-react'
 import { Paragraph, Image as ImgType } from '../types/database'
 import { useNotesStore } from '../store/notes'
 import { useTranslationsStore } from '../store/translations'
@@ -34,6 +34,10 @@ export default function Reader() {
   const [hoverTranslation, setHoverTranslation] = useState(false)
   const [hoverImage, setHoverImage] = useState(false)
   const [hoverDiscussion, setHoverDiscussion] = useState(false)
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false)
+  const [hoverSettings, setHoverSettings] = useState(false)
+  const [readerFontSize, setReaderFontSize] = useState<number>(() => { try { const v = parseInt(localStorage.getItem('reader_font_size') || '18', 10); return isNaN(v) ? 18 : v } catch { return 18 } })
+  const [readerFontFamily, setReaderFontFamily] = useState<string>(() => { try { return localStorage.getItem('reader_font_family') || 'system-ui' } catch { return 'system-ui' } })
   const [translationProvider, setTranslationProvider] = useState<string>(() => {
     try {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('translation_provider') || '' : ''
@@ -1772,7 +1776,7 @@ export default function Reader() {
                               <div key={pid} className={`group w-full rounded-md p-3 relative`}>
                             <div className="flex items-start">
                               <div className="flex-1 pr-2">
-                                <p className="text-lg leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words">{p.content}</p>
+                                <p className="leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words" style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>{p.content}</p>
                                 {tText && (
                                   <div className="mt-2 bg-blue-50 border border-blue-200 rounded-md p-2 text-sm text-blue-900 whitespace-pre-wrap break-words">{tText}</div>
                                 )}
@@ -1901,7 +1905,16 @@ export default function Reader() {
                 className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showDiscussion ? 'bg-blue-100 text-blue-600' : (hoverDiscussion ? 'bg-gray-100 text-gray-700' : 'text-gray-600')}`}
                 title="讨论"
               >
-                <MessageSquare className="h-5 w-5" />
+              <MessageSquare className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => { const next = !showSettingsPanel; setShowSettingsPanel(next) }}
+                onMouseEnter={() => setHoverSettings(true)}
+                onMouseLeave={() => setHoverSettings(false)}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showSettingsPanel ? 'bg-blue-100 text-blue-600' : (hoverSettings ? 'bg-gray-100 text-gray-700' : 'text-gray-600')}`}
+                title="设置"
+              >
+                <Type className="h-5 w-5" />
               </button>
             </div>
             {(showVoicePanel || hoverVoice) && (
@@ -2138,6 +2151,29 @@ export default function Reader() {
             )}
             {(showDiscussion || hoverDiscussion) && (
               <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 relative">
+            {(showSettingsPanel || hoverSettings) && (
+              <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 text-xs mb-1">文字大小</label>
+                    <input type="range" min={12} max={28} step={1} value={readerFontSize} onChange={(e) => { const v = parseInt(e.target.value, 10); setReaderFontSize(v); try { localStorage.setItem('reader_font_size', String(v)) } catch { } }} className="w-full" />
+                    <div className="text-xs text-slate-600 mt-1">{readerFontSize}px</div>
+                  </div>
+                  <div>
+                    <label className="block text-slate-700 text-xs mb-1">字体</label>
+                    <select value={readerFontFamily} onChange={(e) => { const v = e.target.value; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white">
+                      <option value="system-ui">系统默认</option>
+                      <option value="serif">Serif</option>
+                      <option value="sans-serif">Sans-serif</option>
+                      <option value="monospace">Monospace</option>
+                      <option value="Georgia, serif">Georgia</option>
+                      <option value="'Times New Roman', serif">Times New Roman</option>
+                      <option value="Arial, sans-serif">Arial</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
                 <div className="space-y-3">
                   <div className="flex items-center space-x-2">
                     <button onClick={startStreamingAsr} disabled={isRecording} className={`px-3 py-2 rounded-md text-sm ${isRecording ? 'bg-slate-200 text-slate-500' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>流式识别</button>
