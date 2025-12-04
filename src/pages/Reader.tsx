@@ -2149,8 +2149,6 @@ export default function Reader() {
                 })()}
               </div>
             )}
-            {(showDiscussion || hoverDiscussion) && (
-              <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 relative">
             {(showSettingsPanel || hoverSettings) && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
                 <div className="grid grid-cols-2 gap-3">
@@ -2174,6 +2172,8 @@ export default function Reader() {
                 </div>
               </div>
             )}
+            {(showDiscussion || hoverDiscussion) && (
+              <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 relative">
                 <div className="space-y-3">
                   <div className="flex items-center space-x-2">
                     <button onClick={startStreamingAsr} disabled={isRecording} className={`px-3 py-2 rounded-md text-sm ${isRecording ? 'bg-slate-200 text-slate-500' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}>流式识别</button>
