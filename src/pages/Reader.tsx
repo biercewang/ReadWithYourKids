@@ -347,10 +347,11 @@ export default function Reader() {
   }
 
   const getOrderedSelectedIds = () => {
-    if ((selectedIds || []).length === 0) return [getCurrentParagraphId()]
-    const order = paragraphs.slice(0, visibleLimit).map(p => getParagraphId(p))
-    const set = new Set(selectedIds)
-    return order.filter(id => set.has(id))
+    const ids = paragraphs
+      .slice(mergedStart, Math.min(mergedEnd + 1, visibleLimit))
+      .filter(p => !hiddenMergedIds.includes(getParagraphId(p)))
+      .map(p => getParagraphId(p))
+    return ids.length > 0 ? ids : [getCurrentParagraphId()].filter(Boolean) as string[]
   }
 
   const getCombinedText = (ids: string[]) => {
@@ -1715,25 +1716,7 @@ export default function Reader() {
 
               {/* 操作按钮已移至内容区域上方的独立容器 */}
             </div>
-            {/* 阅读窗口外侧右侧：上为“下一段”，下为“上一段”，贴边显示 */}
-            { (currentParagraphIndex < paragraphs.length - 1 || mergedEnd < paragraphs.length - 1) && (
-              <button
-                onClick={handleNextParagraph}
-                aria-label="下一段"
-                className="absolute -right-4 top-8 w-6 h-6 rounded-md border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center z-10"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            )}
-            { (currentParagraphIndex > 0 || mergedStart > 0) && (
-              <button
-                onClick={handlePreviousParagraph}
-                aria-label="上一段"
-                className="absolute -right-4 bottom-8 w-6 h-6 rounded-md border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center z-10"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            )}
+            {/* 移除此处按钮，改为放入阅读窗口容器内部 */}
           </div>
         </div>
       </header>
@@ -1791,7 +1774,7 @@ export default function Reader() {
                       </div>
                     )}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-                      <div className="lg:col-span-12 space-y-2">
+                      <div className="lg:col-span-12 relative space-y-2 px-6">
                         {(() => {
                           const list = paragraphs
                             .slice(mergedStart, Math.min(mergedEnd + 1, visibleLimit))
@@ -1804,27 +1787,19 @@ export default function Reader() {
                             const tText = mergedTranslationsMap[pid] || storeText
                             const nList = mergedNotesMap[pid] || []
                             const aList = mergedAudiosMap[pid] || []
-                            const isSelectedBox = selectedIds.includes(pid)
                             return (
-                              <div key={pid} className={`group w-full rounded-lg p-3 relative border ${isSelectedBox ? 'border-blue-500' : 'border-slate-200'}`}>
-                                <div className="absolute top-2 right-2 transition opacity-0 group-hover:opacity-100">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedIds.includes(pid)}
-                                    onChange={(e) => { setSelectedIds(prev => e.target.checked ? [...prev, pid] : prev.filter(x => x !== pid)) }}
-                                    className="w-4 h-4 accent-blue-600 cursor-pointer"
-                                    aria-label="选择段落"
-                                  />
-                                </div>
-                            <p className="text-lg leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words">{p.content}</p>
-                            {tText && (
-                              <div className="mt-2 bg-blue-50 border border-blue-200 rounded-md p-2 text-sm text-blue-900 whitespace-pre-wrap break-words">{tText}</div>
-                            )}
-                            {imgUrl && (
-                              <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                                <img src={imgUrl} alt="插画" className="w-full object-contain" />
-                              </div>
-                            )}
+                              <div key={pid} className={`group w-full rounded-lg p-3 relative border border-slate-200`}>
+                            <div className="flex items-start">
+                              <div className="flex-1 pr-2">
+                                <p className="text-lg leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words">{p.content}</p>
+                                {tText && (
+                                  <div className="mt-2 bg-blue-50 border border-blue-200 rounded-md p-2 text-sm text-blue-900 whitespace-pre-wrap break-words">{tText}</div>
+                                )}
+                                {imgUrl && (
+                                  <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                                    <img src={imgUrl} alt="插画" className="w-full object-contain" />
+                                  </div>
+                                )}
                                 {nList.length > 0 && (
                                   <div className="mt-2 space-y-1">
                                     {nList.map(n => (
@@ -1841,14 +1816,26 @@ export default function Reader() {
                                 {aList.length > 0 && (
                                   <div className="mt-2">
                                     <button onClick={() => { const url = aList[0]?.audio_url || ''; if (url) { const audio = new Audio(url); audio.play() } }} className="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700">播放语音</button>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                            {/* 段落卡片内不放左右按钮 */}
+                              {/* 卡片不再内置左右按钮 */}
+                            </div>
                           </div>
                             )
                           })
                         })()}
                         <div ref={listBottomRef} />
+                        { (currentParagraphIndex > 0 || mergedStart > 0) && (
+                          <button onClick={handlePreviousParagraph} aria-label="上一段" className="absolute left-0 top-1/2 -translate-y-1/2 w-6 h-12 rounded-md border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center">
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                        )}
+                        { (currentParagraphIndex < paragraphs.length - 1 || mergedEnd < paragraphs.length - 1) && (
+                          <button onClick={handleNextParagraph} aria-label="下一段" className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-12 rounded-md border border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center">
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                     {mergedEnd < paragraphs.length - 1 && (
@@ -1893,7 +1880,7 @@ export default function Reader() {
                 )}
               </div>
 
-
+              {/* 阅读窗口右侧按钮改为贴在当前段落蓝框右侧的卡片内 */}
             </div>
           </div>
 
