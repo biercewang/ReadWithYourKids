@@ -1788,7 +1788,7 @@ export default function Reader() {
                             const nList = mergedNotesMap[pid] || []
                             const aList = mergedAudiosMap[pid] || []
                             return (
-                              <div key={pid} className={`group w-full rounded-md p-3 relative border-y border-slate-200`}>
+                              <div key={pid} className={`group w-full rounded-md p-3 relative`}>
                             <div className="flex items-start">
                               <div className="flex-1 pr-2">
                                 <p className="text-lg leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words">{p.content}</p>
