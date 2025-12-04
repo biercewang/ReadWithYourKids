@@ -72,21 +72,31 @@ export default function Home() {
               .single()
             if (bookError) throw bookError
             const chRows = (parsed.chapters || []).map((c, idx) => ({ book_id: bookData.id, title: c.title || `(${idx + 1})`, order_index: idx + 1 }))
-            const { data: insCh, error: chErr } = await supabase.from('chapters').insert(chRows).select()
+            const { error: chErr } = await supabase.from('chapters').insert(chRows)
             if (chErr) throw chErr
+            const { data: fetchedCh, error: chFetchErr } = await supabase
+              .from('chapters')
+              .select('*')
+              .eq('book_id', bookData.id)
+              .order('order_index', { ascending: true })
+            if (chFetchErr) throw chFetchErr
             const allParas = [] as { chapter_id: string; content: string; order_index: number }[]
             for (let i = 0; i < (parsed.chapters || []).length; i++) {
               const c = parsed.chapters[i]
-              const ch = insCh[i]
+              const ch = fetchedCh[i]
               const plist = (c.paragraphs || []).map((p, j) => ({ chapter_id: ch.id, content: p.content, order_index: j + 1 }))
               allParas.push(...plist)
             }
             if (allParas.length > 0) {
-              const { error: pErr } = await supabase.from('paragraphs').insert(allParas)
-              if (pErr) throw pErr
+              const batchSize = 500
+              for (let i = 0; i < allParas.length; i += batchSize) {
+                const batch = allParas.slice(i, i + batchSize)
+                const { error: pErr } = await supabase.from('paragraphs').insert(batch)
+                if (pErr) throw pErr
+              }
             }
             setCurrentBook(bookData)
-            const chList: Chapter[] = insCh.map(c => ({ id: c.id, book_id: c.book_id, title: c.title, order_index: c.order_index, created_at: c.created_at }))
+            const chList: Chapter[] = fetchedCh.map(c => ({ id: c.id, book_id: c.book_id, title: c.title, order_index: c.order_index, created_at: c.created_at }))
             setChapters(chList)
             const first = chList[0]
             setCurrentChapter(first)

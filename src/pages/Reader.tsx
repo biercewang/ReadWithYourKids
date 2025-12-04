@@ -134,6 +134,7 @@ export default function Reader() {
   const [showTranslationConfig, setShowTranslationConfig] = useState(false)
   const [showImageConfig, setShowImageConfig] = useState(false)
   const [isParagraphsLoading, setIsParagraphsLoading] = useState(false)
+  const [loadingProgress, setLoadingProgress] = useState<number>(0)
   const [supabaseDown, setSupabaseDown] = useState(false)
   const [cloudOnly, setCloudOnly] = useState<boolean>(() => {
     try { return localStorage.getItem('cloud_only') === '1' } catch { return false }
@@ -291,46 +292,47 @@ export default function Reader() {
     const newNotes: Record<string, Note[]> = { ...mergedNotesMap }
     const newAud: Record<string, { id: string, audio_url: string }[]> = { ...mergedAudiosMap }
     if (isSupabaseConfigured && supabase && (!supabaseDown || cloudOnly)) {
-      for (const p of slice) {
-        const pid = getParagraphId(p)
-        try {
-          const { data: imgData } = await supabase
-            .from('images')
-            .select('*')
-            .eq('paragraph_id', pid)
-            .order('created_at', { ascending: false })
-          newImages[pid] = (imgData || []).map(row => ({ id: row.id, paragraph_id: row.paragraph_id, image_url: row.image_url, prompt: row.prompt, created_at: row.created_at }))
-        } catch { newImages[pid] = newImages[pid] || [] }
-        try {
-          const { data: tData } = await supabase
-            .from('translations')
-            .select('*')
-            .eq('paragraph_id', pid)
-            .order('created_at', { ascending: false })
-          const t = (tData || [])[0]
-          newTrans[pid] = t?.translated_text || ''
-        } catch { newTrans[pid] = newTrans[pid] || '' }
-        try {
-          const { data: nData } = await supabase
-            .from('discussions')
-            .select('*')
-            .eq('paragraph_id', pid)
-            .order('created_at', { ascending: false })
-          newNotes[pid] = (nData || []).map(d => ({ id: d.id, book_id: bid, chapter_id: currentChapter?.id || '', paragraph_id: d.paragraph_id, user_type: d.user_type, content: d.content, created_at: d.created_at }))
-        } catch { newNotes[pid] = newNotes[pid] || [] }
-        if (!disableAudios) {
-          try {
-            const { data: aData } = await supabase
-              .from('audios')
-              .select('*')
-              .eq('paragraph_id', pid)
-              .order('created_at', { ascending: false })
-            newAud[pid] = (aData || []).map(a => ({ id: a.id, audio_url: a.audio_url }))
-          } catch { newAud[pid] = newAud[pid] || [] }
-        } else {
-          newAud[pid] = newAud[pid] || []
-        }
-      }
+      const pidList = slice.map(p => getParagraphId(p))
+      setLoadingProgress(v => (v < 60 ? 60 : v))
+      const [imgRes, tRes, nRes, aRes] = await Promise.all([
+        supabase.from('images').select('*').in('paragraph_id', pidList).order('created_at', { ascending: false }),
+        supabase.from('translations').select('*').in('paragraph_id', pidList).order('created_at', { ascending: false }),
+        supabase.from('discussions').select('*').in('paragraph_id', pidList).order('created_at', { ascending: false }),
+        disableAudios ? Promise.resolve({ data: [] }) : supabase.from('audios').select('*').in('paragraph_id', pidList).order('created_at', { ascending: false })
+      ])
+      try {
+        const imgData = (imgRes as any)?.data || []
+        for (const pid of pidList) { newImages[pid] = [] }
+        imgData.forEach((row: any) => {
+          const pid = row.paragraph_id
+          const arr = newImages[pid] || []
+          arr.push({ id: row.id, paragraph_id: row.paragraph_id, image_url: row.image_url, prompt: row.prompt, created_at: row.created_at })
+          newImages[pid] = arr
+        })
+        setLoadingProgress(v => Math.max(v, 75))
+      } catch {}
+      try {
+        const tData = (tRes as any)?.data || []
+        for (const pid of pidList) { if (typeof newTrans[pid] !== 'string') newTrans[pid] = '' }
+        tData.forEach((row: any) => { const pid = row.paragraph_id; if (!newTrans[pid]) newTrans[pid] = row.translated_text || '' })
+        setLoadingProgress(v => Math.max(v, 85))
+      } catch {}
+      try {
+        const nData = (nRes as any)?.data || []
+        for (const pid of pidList) { newNotes[pid] = newNotes[pid] || [] }
+        nData.forEach((d: any) => {
+          const pid = d.paragraph_id
+          const arr = newNotes[pid] || []
+          arr.push({ id: d.id, book_id: bid, chapter_id: currentChapter?.id || '', paragraph_id: d.paragraph_id, user_type: d.user_type, content: d.content, created_at: d.created_at })
+          newNotes[pid] = arr
+        })
+        setLoadingProgress(v => Math.max(v, 93))
+      } catch {}
+      try {
+        const aData = (aRes as any)?.data || []
+        for (const pid of pidList) { newAud[pid] = newAud[pid] || [] }
+        aData.forEach((a: any) => { const pid = a.paragraph_id; const arr = newAud[pid] || []; arr.push({ id: a.id, audio_url: a.audio_url }); newAud[pid] = arr })
+      } catch {}
     } else {
       try {
         const rawImg = localStorage.getItem('demo_images')
@@ -359,6 +361,7 @@ export default function Reader() {
     setMergedTranslationsMap(newTrans)
     setMergedNotesMap(newNotes)
     setMergedAudiosMap(newAud)
+    setLoadingProgress(100)
   }
 
   const shrinkTop = () => {
@@ -1583,7 +1586,12 @@ export default function Reader() {
             <div className="bg-white rounded-lg shadow-md p-8 mb-6 w-full">
               <div className="w-full">
                 {isParagraphsLoading ? (
-                  <div className="text-center text-gray-600 py-12">读取中...</div>
+                  <div className="text-center text-gray-600 py-12">
+                    <div>读取中... {Math.round(Math.max(0, Math.min(100, loadingProgress)))}%</div>
+                    <div className="w-64 h-2 bg-slate-200 rounded mx-auto mt-3">
+                      <div className="h-2 bg-blue-500 rounded" style={{ width: `${Math.max(5, Math.min(100, loadingProgress))}%` }} />
+                    </div>
+                  </div>
                 ) : paragraphs.length === 0 ? (
                   <div className="text-center text-gray-600 py-12">
                     该图书尚未解析到段落，请返回首页重新上传以解析章节。
