@@ -12,7 +12,7 @@ export interface Book {
   title: string
   author?: string
   cover_url?: string
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
   created_at: string
   updated_at: string
 }

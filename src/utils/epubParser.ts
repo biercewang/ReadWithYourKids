@@ -18,21 +18,30 @@ export interface ParsedParagraph {
   orderIndex: number
 }
 
+type ZipLike = { file: (path: string) => { async: (type: string) => Promise<string> } | undefined }
+type HasLoadAsync = { loadAsync: (ab: ArrayBuffer) => Promise<unknown> }
+
 export class EPUBParser {
-  private static async loadZip(arrayBuffer: ArrayBuffer): Promise<any> {
-    const mod: any = await import('jszip')
-    const def = mod?.default
-    if (def && typeof def.loadAsync === 'function') {
-      return def.loadAsync(arrayBuffer)
+  private static async loadZip(arrayBuffer: ArrayBuffer): Promise<ZipLike> {
+    const mod = await import('jszip')
+    const def: unknown = (mod as unknown as { default?: unknown })?.default
+    const maybeDef = def as Partial<HasLoadAsync> | (new () => HasLoadAsync)
+    if (maybeDef && (maybeDef as Partial<HasLoadAsync>).loadAsync && typeof (maybeDef as Partial<HasLoadAsync>).loadAsync === 'function') {
+      const zip = await ((maybeDef as HasLoadAsync).loadAsync(arrayBuffer))
+      return zip as ZipLike
     }
     if (def && typeof def === 'function') {
-      const inst = new def()
+      const Ctor = def as unknown as new () => HasLoadAsync
+      const inst = new Ctor()
       if (typeof inst.loadAsync === 'function') {
-        return inst.loadAsync(arrayBuffer)
+        const zip = await inst.loadAsync(arrayBuffer)
+        return zip as ZipLike
       }
     }
-    if (typeof mod?.loadAsync === 'function') {
-      return mod.loadAsync(arrayBuffer)
+    const maybeLoad = (mod as Partial<HasLoadAsync>)?.loadAsync
+    if (typeof maybeLoad === 'function') {
+      const zip = await maybeLoad(arrayBuffer)
+      return zip as ZipLike
     }
     throw new Error('JSZip加载失败：未找到可用的loadAsync')
   }
@@ -62,7 +71,7 @@ export class EPUBParser {
         const linear = ir.getAttribute('linear') || 'yes'
         if (linear !== 'no') spineIds.push(idref)
       })
-      const basePath = fullPath.replace(/[^\/]+$/, '')
+      const basePath = fullPath.replace(/[^/]+$/, '')
       const chapters: ParsedChapter[] = []
 
       const tocEntries = await EPUBParser.getTocEntriesFromOpf(zip, opf, basePath)
@@ -193,7 +202,7 @@ export class EPUBParser {
     return stack.join('/')
   }
 
-  private static async getTocEntriesFromOpf(zip: any, opf: Document, basePath: string): Promise<{ path: string, frag: string|null, title: string }[]> {
+  private static async getTocEntriesFromOpf(zip: ZipLike, opf: Document, basePath: string): Promise<{ path: string, frag: string|null, title: string }[]> {
     let navHref: string | null = null
     let ncxHref: string | null = null
     opf.querySelectorAll('manifest > item').forEach(it => {
@@ -206,7 +215,7 @@ export class EPUBParser {
     const entries: { path: string, frag: string|null, title: string }[] = []
     if (navHref) {
       const navAbs = basePath + navHref
-      const navDir = navAbs.replace(/[^\/]+$/, '')
+      const navDir = navAbs.replace(/[^/]+$/, '')
       const navStr = await zip.file(navAbs)?.async('string')
       if (navStr) {
         const doc = new DOMParser().parseFromString(navStr, 'text/html')
@@ -257,7 +266,7 @@ export class EPUBParser {
     return entries.filter(e => e.path.toLowerCase().endsWith('.xhtml') || e.path.toLowerCase().endsWith('.html'))
   }
 
-  private static async segmentFileByToc(zip: any, absPath: string, points: { frag: string|null, title: string }[]): Promise<{ title: string, html: string }[]> {
+  private static async segmentFileByToc(zip: ZipLike, absPath: string, points: { frag: string|null, title: string }[]): Promise<{ title: string, html: string }[]> {
     const raw = await zip.file(absPath)?.async('string')
     if (!raw) return []
     type Pos = { title: string, frag: string|null, pos: number }
@@ -266,12 +275,12 @@ export class EPUBParser {
       let pos = -1
       if (pt.frag) {
         const pats = [
-          new RegExp(`id\\s*=\\s*"${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}"`),
-          new RegExp(`id\\s*=\\s*'${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}'`),
-          new RegExp(`name\\s*=\\s*"${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}"`),
-          new RegExp(`name\\s*=\\s*'${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}'`),
-          new RegExp(`xml:id\\s*=\\s*"${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}"`),
-          new RegExp(`xml:id\\s*=\\s*'${pt.frag.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}'`),
+          new RegExp(`id\\s*=\\s*"${pt.frag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
+          new RegExp(`id\\s*=\\s*'${pt.frag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`),
+          new RegExp(`name\\s*=\\s*"${pt.frag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
+          new RegExp(`name\\s*=\\s*'${pt.frag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`),
+          new RegExp(`xml:id\\s*=\\s*"${pt.frag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
+          new RegExp(`xml:id\\s*=\\s*'${pt.frag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`),
         ]
         for (const rg of pats) {
           const m = raw.match(rg)

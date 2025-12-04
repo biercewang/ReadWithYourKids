@@ -15,7 +15,7 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
   translations: [],
   loadTranslation: (bookId: string, paragraphId: string) => {
     const cloudOnly = typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'
-    const supa = isSupabaseConfigured && supabase && (!(useTranslationsStore as any)._supaDown || cloudOnly)
+    const supa = isSupabaseConfigured && supabase && (!((useTranslationsStore as unknown as { _supaDown?: boolean })._supaDown) || cloudOnly)
     if (supa) {
       ;(async () => {
         try {
@@ -33,8 +33,9 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
             created_at: row.created_at,
           }))
           set({ translations: list })
-        } catch {
-          if (!cloudOnly) { (useTranslationsStore as any)._supaDown = true }
+        } catch (e) {
+          void e
+          if (!cloudOnly) { (useTranslationsStore as unknown as { _supaDown?: boolean })._supaDown = true }
           try {
             const raw = localStorage.getItem(KEY)
             const map = raw ? JSON.parse(raw) : {}
@@ -44,7 +45,8 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
               id: 'local', paragraph_id: paragraphId, translated_text: text, language: 'zh', created_at: new Date().toISOString(),
             } : null
             set({ translations: t ? [t] : [] })
-          } catch {
+          } catch (e) {
+            void e
             set({ translations: [] })
           }
         }
@@ -64,7 +66,8 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
         created_at: new Date().toISOString(),
       } : null
       set({ translations: t ? [t] : [] })
-    } catch {
+    } catch (e) {
+      void e
       set({ translations: [] })
     }
   },
@@ -87,7 +90,7 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
             created_at: data.created_at,
           }
           set({ translations: [t, ...get().translations] })
-        } catch {}
+        } catch (e) { void e }
       })()
       return
     }
@@ -106,7 +109,7 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
         created_at: new Date().toISOString(),
       }
       set({ translations: [t, ...get().translations] })
-    } catch {}
+    } catch (e) { void e }
   },
   deleteTranslation: (bookId: string, paragraphId: string, translationId: string) => {
     const supa = isSupabaseConfigured && supabase
@@ -120,7 +123,7 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
           if (error) throw error
           const updated = get().translations.filter(t => t.id !== translationId)
           set({ translations: updated })
-        } catch {}
+        } catch (e) { void e }
       })()
       return
     }
@@ -136,6 +139,6 @@ export const useTranslationsStore = create<TranslationsState>((set, get) => ({
       }
       const updated = get().translations.filter(t => t.id !== translationId)
       set({ translations: updated })
-    } catch {}
+    } catch (e) { void e }
   }
 }))
