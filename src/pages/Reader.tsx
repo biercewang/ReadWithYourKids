@@ -1858,7 +1858,7 @@ export default function Reader() {
                 <Volume2 className="h-5 w-5" />
               </button>
               <button
-                onClick={() => { const next = !showTranslation; setShowTranslation(next); if (next) { setShowImagePanel(false); setShowDiscussion(false); handleTranslation() } }}
+                onClick={() => { const next = !showTranslation; setShowTranslation(next); if (next) { setShowImagePanel(false); setShowDiscussion(false); if (!isTranslating) { const ids = getOrderedSelectedIds(); const targetId = ids[0]; const storeText = (translations || []).find(t => t.paragraph_id === targetId)?.translated_text || ''; const tText = mergedTranslationsMap[targetId] || storeText; if (!tText || tText.length === 0 || needsRetranslate) { handleTranslation(); setNeedsRetranslate(false) } } } }}
                 className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showTranslation ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                 title="翻译"
               >
@@ -1898,7 +1898,7 @@ export default function Reader() {
                     const ids = getOrderedSelectedIds(); const preview = getCombinedText(ids); return (
                       <div className="mb-2">
                         <div className="text-xs text-slate-600 mb-1">待阅读文本</div>
-                        <div className="border border-slate-200 rounded-md p-2 bg-white text-sm text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
+                        <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
                           {preview && preview.length > 0 ? preview : <span className="text-slate-400">请在左侧选中段落文本</span>}
                         </div>
                       </div>
@@ -2081,7 +2081,7 @@ export default function Reader() {
                   return (
                     <div className="mb-2">
                       <div className="text-xs text-slate-600 mb-1">待翻译文本</div>
-                      <div className="border border-slate-200 rounded-md p-2 bg-white text-sm text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
+                      <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
                         {preview && preview.length > 0 ? preview : <span className="text-slate-400">请在左侧选中段落文本</span>}
                       </div>
                     </div>
