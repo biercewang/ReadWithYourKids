@@ -1023,7 +1023,8 @@ export default function Reader() {
 
   const gzipBytes = async (input: Uint8Array) => {
     const cs = new CompressionStream('gzip')
-    const blob = new Blob([input])
+    const rawAb = new Uint8Array(input).buffer
+    const blob = new Blob([rawAb])
     const stream = blob.stream().pipeThrough(cs)
     const ab = await new Response(stream).arrayBuffer()
     return new Uint8Array(ab)
@@ -1124,7 +1125,8 @@ export default function Reader() {
                     let p = payloadBytes
                     if (compress === 0x1) {
                       const ds = new DecompressionStream('gzip')
-                      const blob = new Blob([p])
+                      const rawAb = new Uint8Array(p).buffer
+                      const blob = new Blob([rawAb])
                       const stream = blob.stream().pipeThrough(ds)
                       const ab = await new Response(stream).arrayBuffer()
                       p = new Uint8Array(ab)
@@ -1149,7 +1151,8 @@ export default function Reader() {
             let p = payloadBytes
             try {
               const ds = new DecompressionStream('gzip')
-              const blob = new Blob([p])
+              const rawAb = new Uint8Array(p).buffer
+              const blob = new Blob([rawAb])
               const stream = blob.stream().pipeThrough(ds)
               const ab = await new Response(stream).arrayBuffer()
               p = new Uint8Array(ab)
