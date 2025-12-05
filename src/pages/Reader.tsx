@@ -161,6 +161,14 @@ export default function Reader() {
   const [imageDrawerOpen, setImageDrawerOpen] = useState<boolean>(false)
   const [imageDrawerPid, setImageDrawerPid] = useState<string>('')
 
+  const formatChapterTitle = (t: string) => {
+    const s = (t || '').trim()
+    const onlyParen = /^\(\s*[^)]*\s*\)$/.test(s)
+    if (onlyParen) return s
+    const replaced = s.replace(/\(\s*[^)]*\s*\)/g, '').replace(/\s+/g, ' ').trim()
+    return replaced || s
+  }
+
   const preloadNextParagraphContent = async () => {
     try {
       if (!currentBook || !currentChapter || paragraphs.length === 0) return
@@ -825,11 +833,44 @@ export default function Reader() {
       const targetId = ids[0]
       const text = getCombinedText(ids)
       setIsTranslating(true)
-      const full = translationProvider === 'openrouter'
-        ? await translateWithOpenRouter(text, 'zh', translationOpenRouterModel)
-        : await translateWithGemini(text, 'zh')
-      setMergedTranslationsMap(prev => ({ ...prev, [targetId]: full }))
-      if (full && full.length > 0) addTranslation(bid, targetId, full, 'zh')
+      setMergedTranslationsMap(prev => ({ ...prev, [targetId]: '' }))
+      let appended = false
+      let accum = ''
+      let buf = ''
+      let flushing = false
+      const flush = () => {
+        if (buf.length === 0) { flushing = false; return }
+        const take = Math.min(3, buf.length)
+        const piece = buf.slice(0, take)
+        buf = buf.slice(take)
+        setMergedTranslationsMap(prev => ({ ...prev, [targetId]: (prev[targetId] || '') + piece }))
+        setTimeout(flush, 30)
+      }
+      if (translationProvider === 'openrouter') {
+        await translateWithOpenRouterStream(text, (s) => {
+          appended = true
+          accum += s
+          buf += s
+          if (!flushing) { flushing = true; flush() }
+        }, 'zh', translationOpenRouterModel)
+      } else {
+        await translateWithGeminiStream(text, (s) => {
+          appended = true
+          accum += s
+          buf += s
+          if (!flushing) { flushing = true; flush() }
+        }, 'zh')
+      }
+      if (!appended) {
+        const full = translationProvider === 'openrouter'
+          ? await translateWithOpenRouter(text, 'zh', translationOpenRouterModel)
+          : await translateWithGemini(text, 'zh')
+        buf += full
+        if (!flushing) { flushing = true; flush() }
+        if (full && full.length > 0) addTranslation(bid, targetId, full, 'zh')
+      } else {
+        if (accum && accum.length > 0) addTranslation(bid, targetId, accum, 'zh')
+      }
     } catch (e) {
       alert(e instanceof Error ? e.message : '翻译失败')
     } finally {
@@ -1633,8 +1674,11 @@ export default function Reader() {
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null
-      const inside = !!t && (!!t.closest('.v2-settings-menu') || !!t.closest('.v2-settings-trigger'))
-      if (!inside) setShowSettingsPanel(false)
+      const inside = !!t && (
+        !!t.closest('.v2-settings-menu') ||
+        !!t.closest('.v2-settings-trigger')
+      )
+      if (!inside) { setShowSettingsPanel(false) }
     }
     document.addEventListener('click', onDocClick)
     return () => { document.removeEventListener('click', onDocClick) }
@@ -1670,11 +1714,46 @@ export default function Reader() {
         <header className="bg-transparent">
           <div className="max-w-3xl mx-auto px-6">
             <div className="flex justify-between items-center py-4">
-              <div className="flex items-center">
+              <div className="relative flex items-center">
                 <button onClick={() => { try { localStorage.setItem('home_refresh', '1') } catch {} ; navigate('/') }} className="p-2 text-[#374151] hover:scale-105 active:scale-95">
                   <ArrowLeft className="h-5 w-5" />
                 </button>
-                <h1 className="ml-3 text-xl font-semibold" style={{ color: v2TextColor }}>{currentBook.title}</h1>
+                <select
+                  value={currentChapter?.id || ''}
+                  onChange={(e) => {
+                    const ch = (useBooksStore.getState().chapters || []).find(c => c.id === e.target.value)
+                    if (ch) {
+                      setCurrentChapter(ch)
+                      setIsParagraphsLoading(true)
+                      const cached = preloadedParas[ch.id]
+                      if (cached && Array.isArray(cached) && cached.length > 0) {
+                        setParagraphs(cached)
+                        setIsParagraphsLoading(false)
+                      } else {
+                        setParagraphs([])
+                        fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
+                      }
+                      setCurrentParagraphIndex(0)
+                      setMergedStart(0)
+                      setMergedEnd(0)
+                      setSelectedIds([])
+                      setHiddenMergedIds([])
+                      setDeleteMenuPid(null)
+                      setMergedImagesMap({})
+                      setMergedTranslationsMap({})
+                      setMergedNotesMap({})
+                      setMergedAudiosMap({})
+                      setShowTranslation(false)
+                    }
+                  }}
+                  className="v2-chapter-trigger ml-3 text-xl font-semibold truncate w-[32rem] text-left bg-transparent border-none outline-none appearance-none hover:opacity-80"
+                  style={{ color: v2TextColor }}
+                  title={formatChapterTitle(currentChapter?.title || currentBook.title)}
+                >
+                  {(useBooksStore.getState().chapters || []).map(c => (
+                    <option key={c.id} value={c.id}>{formatChapterTitle(c.title)}</option>
+                  ))}
+                </select>
               </div>
               <div className="relative">
                 <button
@@ -1752,7 +1831,7 @@ export default function Reader() {
                 const showT = showTranslation || expandedTranslations.has(pid)
                 return (
                   <div key={pid} className="group relative">
-                    <div className="absolute -right-2 -top-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute -right-2 -bottom-3 opacity-0 group-hover:opacity-100 transition-opacity">
                       <div className="flex items-center space-x-1 bg-white/20 backdrop-blur-sm rounded-full px-1.5 py-0.5">
                         <button
                           onClick={async ()=>{ const has = expandedTranslations.has(pid); const next = new Set(expandedTranslations); if (has) { next.delete(pid) } else { next.add(pid); if (!tText || tText.length === 0) { setSelectedIds([pid]); await handleTranslation([pid]) } } setExpandedTranslations(next) }}
