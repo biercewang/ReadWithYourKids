@@ -343,7 +343,7 @@ export default function Home() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-semibold text-[#2D3748] mb-2">我的图书</h2>
+          <h2 className="text-3xl font-semibold text-[#2D3748] mb-2">我的书房</h2>
           <p className="text-[#4A5568]">导入喜欢的书，在温馨的书房开始亲子阅读</p>
         </div>
 
