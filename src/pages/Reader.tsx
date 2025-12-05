@@ -751,6 +751,16 @@ export default function Reader() {
     setHiddenMergedIds([])
     setDeleteMenuPid(null)
     setIsParagraphsLoading(true)
+    ;(async () => {
+      try {
+        const saved = await getSavedState()
+        if (saved) {
+          if (typeof saved.paragraphIndex === 'number') setCurrentParagraphIndex(Math.max(0, saved.paragraphIndex))
+          if (typeof saved.mergedStart === 'number') setMergedStart(Math.max(0, saved.mergedStart))
+          if (typeof saved.mergedEnd === 'number') setMergedEnd(Math.max(0, saved.mergedEnd))
+        }
+      } catch {}
+    })()
   }, [bookId])
 
   useEffect(() => {
@@ -1666,6 +1676,10 @@ export default function Reader() {
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [currentBook, currentChapter, currentParagraphIndex, mergedStart, mergedEnd])
+
+  useEffect(() => {
+    return () => { try { saveReadingStateLocal(); saveReadingStateRemote() } catch { } }
+  }, [])
 
   useEffect(() => {
     if (currentBook && currentChapter && paragraphs.length > 0) {

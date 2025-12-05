@@ -24,6 +24,8 @@ export default function Home() {
   const [changing, setChanging] = useState(false)
   const [changeError, setChangeError] = useState('')
   const [changeOk, setChangeOk] = useState('')
+  const [readingStates, setReadingStates] = useState<Record<string, { chapterId: string; paragraphIndex: number; mergedStart?: number; mergedEnd?: number }>>({})
+  const [chapterTitles, setChapterTitles] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!authLoading) {
@@ -43,6 +45,22 @@ export default function Home() {
       }
     } catch {}
   }, [user, fetchBooks])
+
+  useEffect(() => {
+    try {
+      const rawRead = localStorage.getItem('reading_state')
+      const mapRead = rawRead ? JSON.parse(rawRead) : {}
+      setReadingStates(mapRead || {})
+      const rawCh = localStorage.getItem('demo_chapters')
+      const mapCh = rawCh ? JSON.parse(rawCh) : {}
+      const ct: Record<string, string> = {}
+      Object.keys(mapCh).forEach((bid) => {
+        const chList = mapCh[bid] || []
+        chList.forEach((c: any) => { ct[c.id] = c.title || '' })
+      })
+      setChapterTitles(ct)
+    } catch {}
+  }, [books])
 
   const handleFileUpload = async (file: File) => {
     if (!user) return
@@ -260,14 +278,18 @@ export default function Home() {
       try {
         const rawCh = localStorage.getItem('demo_chapters')
         const rawPara = localStorage.getItem('demo_paragraphs')
+        const rawRead = localStorage.getItem('reading_state')
         const mapCh = rawCh ? JSON.parse(rawCh) : {}
         const mapParaAll = rawPara ? JSON.parse(rawPara) : {}
+        const readMap = rawRead ? JSON.parse(rawRead) : {}
         const chList = mapCh[book.id] || []
         if (chList.length > 0) {
           setChapters(chList)
-          setCurrentChapter(chList[0])
+          const saved = readMap[book.id] || null
+          const target = saved?.chapterId ? (chList.find((c: any) => c.id === saved.chapterId) || chList[0]) : chList[0]
+          setCurrentChapter(target)
           const chapterParaMap = mapParaAll[book.id] || {}
-          const paraList = chapterParaMap[chList[0].id] || []
+          const paraList = chapterParaMap[target.id] || []
           if (paraList.length > 0) setParagraphs(paraList)
         }
       } catch {}
@@ -396,6 +418,14 @@ export default function Home() {
                 <div className="p-4 flex flex-col h-full">
                   <h3 className="font-semibold text-gray-900 mb-2 text-base">{book.title}</h3>
                   <p className="text-sm text-gray-600">{book.author || '未知作者'}</p>
+                  {(() => {
+                    const s = readingStates[book.id]
+                    if (!s) return null
+                    const ct = chapterTitles[s.chapterId] || ''
+                    return (
+                      <p className="text-xs text-gray-500 mt-1">继续阅读：{ct ? `《${ct}》` : '上次章节'} 第 {Math.max(1, (s.paragraphIndex || 0) + 1)} 段</p>
+                    )
+                  })()}
                   <div className="flex space-x-2 mt-auto">
                     <button
                       onClick={() => handleStartReading(book)}
