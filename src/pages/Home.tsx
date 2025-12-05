@@ -5,9 +5,8 @@ import { useNavigate } from 'react-router-dom'
 import { Book, Upload, Plus, BookOpen, Trash2, Play, KeyRound } from 'lucide-react'
 import { parseMarkdownFile } from '../utils/mdParser'
 import { EPUBParser } from '../utils/epubParser'
-import { newId } from '../utils/id'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { Book as BookType, Chapter, Paragraph } from '../types/database'
+import { Book as BookType, Chapter } from '../types/database'
 
 export default function Home() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuthStore()
@@ -24,8 +23,6 @@ export default function Home() {
   const [changing, setChanging] = useState(false)
   const [changeError, setChangeError] = useState('')
   const [changeOk, setChangeOk] = useState('')
-  const [readingStates, setReadingStates] = useState<Record<string, { chapterId: string; paragraphIndex: number; mergedStart?: number; mergedEnd?: number }>>({})
-  const [chapterTitles, setChapterTitles] = useState<Record<string, string>>({})
   const [readingStatesCloud, setReadingStatesCloud] = useState<Record<string, { chapterId: string; paragraphIndex: number; mergedStart?: number; mergedEnd?: number; updatedAt?: string }>>({})
   const [chapterTitlesCloud, setChapterTitlesCloud] = useState<Record<string, string>>({})
 
@@ -48,21 +45,7 @@ export default function Home() {
     } catch {}
   }, [user, fetchBooks])
 
-  useEffect(() => {
-    try {
-      const rawRead = localStorage.getItem('reading_state')
-      const mapRead = rawRead ? JSON.parse(rawRead) : {}
-      setReadingStates(mapRead || {})
-      const rawCh = localStorage.getItem('demo_chapters')
-      const mapCh = rawCh ? JSON.parse(rawCh) : {}
-      const ct: Record<string, string> = {}
-      Object.keys(mapCh).forEach((bid) => {
-        const chList = mapCh[bid] || []
-        chList.forEach((c: any) => { ct[c.id] = c.title || '' })
-      })
-      setChapterTitles(ct)
-    } catch {}
-  }, [books])
+  // 仅云端模式：不再读取本地 demo_* 或 reading_state
 
   useEffect(() => {
     (async () => {
@@ -160,108 +143,17 @@ export default function Home() {
             const first = chList[0]
             setCurrentChapter(first)
             await fetchParagraphs(first.id)
-            navigate(`/reader/${bookData.id}`)
+            navigate(`/reader/${bookData.id}?fresh=1`)
             return
           } catch (e) {
-            console.warn('Supabase上传失败，回退至本地存储模式', e)
+            alert('当前仅支持云端模式，请稍后重试或检查网络/登录状态')
+            return
           }
         }
       }
-      
-      const fallbackBook: BookType = {
-        id: newId(),
-        user_id: user.id,
-        title: parsed.title || file.name.replace('.md', ''),
-        author: parsed.author,
-        cover_url: parsed.cover,
-        metadata: { fileName: file.name },
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-      try {
-        setCurrentBook(fallbackBook)
-      } catch (e) {
-        throw new Error(`设置当前图书失败: ${e instanceof Error ? e.message : String(e)}`)
-      }
-      
-      // Create a Chapter in memory and map paragraphs
-      const chapter: Chapter = {
-        id: newId(),
-        book_id: fallbackBook.id,
-        title: (parsed.chapters[0]?.title) || '(1)',
-        order_index: 1,
-        created_at: new Date().toISOString(),
-      }
-      const chapterList: Chapter[] = (parsed.chapters || []).map((c, idx) => ({
-        id: idx === 0 ? chapter.id : newId(),
-        book_id: fallbackBook.id,
-        title: c.title || `(${idx + 1})`,
-        order_index: idx + 1,
-        created_at: new Date().toISOString(),
-      }))
-      try {
-        setChapters(chapterList)
-      } catch (e) {
-        throw new Error(`写入章节失败: ${e instanceof Error ? e.message : String(e)}`)
-      }
-      try {
-        const rawCh = localStorage.getItem('demo_chapters')
-        const mapCh = rawCh ? JSON.parse(rawCh) : {}
-        mapCh[fallbackBook.id] = chapterList
-        localStorage.setItem('demo_chapters', JSON.stringify(mapCh))
-      } catch {}
-      try {
-        setCurrentChapter(chapter)
-      } catch (e) {
-        throw new Error(`设置当前章节失败: ${e instanceof Error ? e.message : String(e)}`)
-      }
-      
-      const paras: Paragraph[] = ((parsed.chapters[0]?.paragraphs) || []).map((p, idx) => ({
-        id: newId(),
-        chapter_id: chapter.id,
-        content: p.content,
-        order_index: idx + 1,
-        created_at: new Date().toISOString(),
-      }))
-      try {
-        setParagraphs(paras)
-      } catch (e) {
-        throw new Error(`写入段落失败: ${e instanceof Error ? e.message : String(e)}`)
-      }
-
-      const allChapterParas: Record<string, Paragraph[]> = {};
-      (parsed.chapters || []).forEach((c, idx) => {
-        const chId = chapterList[idx].id
-        const list: Paragraph[] = (c.paragraphs || []).map((p, i) => ({
-          id: newId(),
-          chapter_id: chId,
-          content: p.content,
-          order_index: i + 1,
-          created_at: new Date().toISOString(),
-        }))
-        allChapterParas[chId] = list
-      })
-      try {
-        const rawPara = localStorage.getItem('demo_paragraphs')
-        const mapPara = rawPara ? JSON.parse(rawPara) : {}
-        mapPara[fallbackBook.id] = allChapterParas
-        localStorage.setItem('demo_paragraphs', JSON.stringify(mapPara))
-      } catch {}
-
-      // Persist book into local storage list for Home page
-      try {
-        const rawBooks = localStorage.getItem('demo_books')
-        const list: BookType[] = rawBooks ? JSON.parse(rawBooks) : []
-        const exists = list.find(b => b.id === fallbackBook.id)
-        const updated = exists ? list.map(b => (b.id === fallbackBook.id ? fallbackBook : b)) : [fallbackBook, ...list]
-        localStorage.setItem('demo_books', JSON.stringify(updated))
-      } catch {}
-      
-      try {
-        navigate(`/reader/${fallbackBook.id}`)
-      } catch (e) {
-        throw new Error(`跳转阅读页失败: ${e instanceof Error ? e.message : String(e)}`)
-      }
+      // 云端模式强制：如果未登录或上传失败，则提示后终止
+      alert('云端模式已启用：请登录并确保云端可用后再上传')
+      return
     } catch (error) {
       console.error('Upload error:', error)
       alert(error instanceof Error ? error.message : '上传失败，请重试')
@@ -305,32 +197,7 @@ export default function Home() {
 
   const handleStartReading = (book: BookType) => {
     setCurrentBook(book)
-    // Prefill chapters & paragraphs in demo mode if available
-    if (!isSupabaseConfigured) {
-      try {
-        const rawCh = localStorage.getItem('demo_chapters')
-        const rawPara = localStorage.getItem('demo_paragraphs')
-        const rawRead = localStorage.getItem('reading_state')
-        const mapCh = rawCh ? JSON.parse(rawCh) : {}
-        const mapParaAll = rawPara ? JSON.parse(rawPara) : {}
-        const readMap = rawRead ? JSON.parse(rawRead) : {}
-        const chList = mapCh[book.id] || []
-        if (chList.length > 0) {
-          setChapters(chList)
-          const saved = readMap[book.id] || null
-          const target = saved?.chapterId ? (chList.find((c: any) => c.id === saved.chapterId) || chList[0]) : chList[0]
-          setCurrentChapter(target)
-          const chapterParaMap = mapParaAll[book.id] || {}
-          const paraList = chapterParaMap[target.id] || []
-          if (paraList.length > 0) setParagraphs(paraList)
-        }
-      } catch {}
-    }
-    if (isSupabaseConfigured) {
-      navigate(`/reader/${book.id}?fresh=1`)
-    } else {
-      navigate(`/reader/${book.id}`)
-    }
+    navigate(`/reader/${book.id}?fresh=1`)
   }
 
   const handleContinueReading = (book: BookType) => {
@@ -400,15 +267,7 @@ export default function Home() {
               <h1 className="ml-3 text-2xl font-bold text-gray-900">亲子阅读助手</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <label className="flex items-center space-x-2 text-sm text-gray-700 mr-4">
-                <input
-                  type="checkbox"
-                  defaultChecked={typeof localStorage !== 'undefined' && localStorage.getItem('cloud_only') === '1'}
-                  onChange={(e)=>{ try { localStorage.setItem('cloud_only', e.target.checked ? '1' : '0') } catch {}; if (user) { fetchBooks(user.id) } }}
-                  className="w-4 h-4 accent-blue-600"
-                />
-                <span>只使用云端</span>
-              </label>
+              
               <span className="text-gray-700">欢迎，{user?.name}</span>
               <button
                 onClick={() => { setChangePwdOpen(true); setChangeError(''); setChangeOk(''); setCurrPwd(''); setNewPwd(''); setConfirmPwd('') }}
@@ -459,33 +318,35 @@ export default function Home() {
                 <div className="p-4 flex flex-col h-full">
                   <h3 className="font-semibold text-gray-900 mb-2 text-base">{book.title}</h3>
                   <p className="text-sm text-gray-600">{book.author || '未知作者'}</p>
-                  {(() => {
-                    const s = isSupabaseConfigured ? readingStatesCloud[book.id] : readingStates[book.id]
-                    if (!s) return null
-                    const ctmap = isSupabaseConfigured ? chapterTitlesCloud : chapterTitles
-                    const ct = ctmap[s.chapterId] || ''
-                    const upd = isSupabaseConfigured && (s as any).updatedAt ? new Date((s as any).updatedAt) : null
-                    return (
-                      <>
-                        <p className="text-xs text-gray-500 mt-1">继续阅读：{ct ? `《${ct}》` : '上次章节'} 第 {Math.max(1, (s.paragraphIndex || 0) + 1)} 段</p>
-                        {upd && <p className="text-xs text-gray-400">最近阅读：{upd.toLocaleString()}</p>}
-                      </>
-                    )
-                  })()}
-                  <div className="flex space-x-2 mt-auto">
+                  <div className="flex items-center space-x-2 mt-auto">
                     <button
                       onClick={() => handleStartReading(book)}
-                      className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                      aria-label="开始阅读"
+                      title="开始阅读"
+                      className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md"
                     >
-                      <Play className="h-4 w-4 mr-1" />
-                      开始阅读
+                      <Play className="h-4 w-4" />
                     </button>
-                    <button
-                      onClick={() => handleContinueReading(book)}
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
-                    >
-                      继续阅读
-                    </button>
+                    <div className="relative group">
+                      <button
+                        onClick={() => handleContinueReading(book)}
+                        aria-label="继续阅读"
+                        title="继续阅读"
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 shadow-sm hover:shadow-md"
+                      >
+                        <BookOpen className="h-4 w-4" />
+                      </button>
+                      {(() => {
+                        const s = readingStatesCloud[book.id]
+                        if (!s) return null
+                        const ct = chapterTitlesCloud[s.chapterId] || ''
+                        return (
+                          <div className="absolute z-10 hidden group-hover:block left-1/2 -translate-x-1/2 top-full mt-2 rounded-md bg-gray-900 text-white text-xs px-3 py-2 shadow-xl min-w-[220px] max-w-[340px] whitespace-pre-wrap break-words">
+                            {(ct ? `《${ct}》` : '上次章节') + '\n' + `第 ${Math.max(1, (s.paragraphIndex || 0) + 1)} 段`}
+                          </div>
+                        )
+                      })()}
+                    </div>
                     <button onClick={() => handleDelete(book)} className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                       <Trash2 className="h-4 w-4" />
                     </button>

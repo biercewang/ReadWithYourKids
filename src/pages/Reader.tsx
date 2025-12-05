@@ -223,10 +223,7 @@ export default function Reader() {
       await handleTextToSpeech([targetId])
     } catch { await handleTextToSpeech(pid ? [pid] : undefined) }
   }
-  const [supabaseDown, setSupabaseDown] = useState(false)
-  const [cloudOnly, setCloudOnly] = useState<boolean>(() => {
-    try { return localStorage.getItem('cloud_only') === '1' } catch { return false }
-  })
+  
   const disableAudios = (() => {
     try {
       const env = (import.meta as any).env
@@ -296,29 +293,10 @@ export default function Reader() {
 
   const computePrevStart = (startIndex: number) => Math.max(0, startIndex - 1)
 
-  const loadReadingStateLocal = () => {
-    try {
-      const bid = getBookKey()
-      const raw = localStorage.getItem('reading_state')
-      const map = raw ? JSON.parse(raw) : {}
-      return map[bid] || null
-    } catch { return null }
-  }
-
-  const saveReadingStateLocal = () => {
-    try {
-      if (!currentBook || !currentChapter) return
-      const bid = getBookKey()
-      const raw = localStorage.getItem('reading_state')
-      const map = raw ? JSON.parse(raw) : {}
-      map[bid] = { chapterId: currentChapter.id, paragraphIndex: currentParagraphIndex, mergedStart, mergedEnd }
-      localStorage.setItem('reading_state', JSON.stringify(map))
-    } catch { }
-  }
+  
 
   const loadReadingStateRemote = async (): Promise<any> => {
     try {
-      if (supabaseDown && !cloudOnly) return null
       if (!(isSupabaseConfigured && supabase) || !currentBook || !user) return null
       const { data } = await supabase
         .from('reading_progress')
@@ -327,15 +305,14 @@ export default function Reader() {
         .eq('book_id', currentBook.id)
         .single()
       if (!data) return null
-      return { chapterId: data.chapter_id, paragraphIndex: data.paragraph_index, mergedStart: data.merged_start, mergedEnd: data.merged_end }
-    } catch { setSupabaseDown(true); return null }
+      return { chapterId: data.chapter_id, paragraphIndex: data.paragraph_index || 0, mergedStart: data.merged_start, mergedEnd: data.merged_end }
+    } catch { return null }
   }
 
   const saveReadingStateRemote = async (): Promise<void> => {
     try {
-      if (supabaseDown && !cloudOnly) return
       if (!(isSupabaseConfigured && supabase) || !currentBook || !currentChapter || !user) return
-      const { error } = await supabase
+      await supabase
         .from('reading_progress')
         .upsert({
           user_id: user.id,
@@ -346,14 +323,11 @@ export default function Reader() {
           merged_end: mergedEnd,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id,book_id' })
-      if (error) { setSupabaseDown(true); return }
-    } catch { setSupabaseDown(true) }
+    } catch { }
   }
 
   const getSavedState = async () => {
-    let saved = await loadReadingStateRemote()
-    if (!saved) saved = loadReadingStateLocal()
-    return saved
+    return await loadReadingStateRemote()
   }
 
   const getOrderedSelectedIds = () => {
@@ -401,7 +375,7 @@ export default function Reader() {
     const newTrans: Record<string, string> = { ...mergedTranslationsMap }
     const newNotes: Record<string, Note[]> = { ...mergedNotesMap }
     const newAud: Record<string, { id: string, audio_url: string }[]> = { ...mergedAudiosMap }
-    if (isSupabaseConfigured && supabase && (!supabaseDown || cloudOnly)) {
+    if (isSupabaseConfigured && supabase) {
       const pidList = slice.map(p => getParagraphId(p))
       setLoadingProgress(v => (v < 60 ? 60 : v))
       const [imgRes, tRes, nRes, aRes] = await Promise.all([
@@ -443,34 +417,6 @@ export default function Reader() {
         for (const pid of pidList) { newAud[pid] = newAud[pid] || [] }
         aData.forEach((a: any) => { const pid = a.paragraph_id; const arr = newAud[pid] || []; arr.push({ id: a.id, audio_url: a.audio_url }); newAud[pid] = arr })
       } catch {}
-    } else {
-      try {
-        const rawImg = localStorage.getItem('demo_images')
-        const rawTrans = localStorage.getItem('demo_translations')
-        const rawNotes = localStorage.getItem('demo_notes')
-        const rawAud = localStorage.getItem('demo_audios')
-        const mapImg = rawImg ? JSON.parse(rawImg) : {}
-        const mapTrans = rawTrans ? JSON.parse(rawTrans) : {}
-        const mapNotes = rawNotes ? JSON.parse(rawNotes) : {}
-        const mapAud = rawAud ? JSON.parse(rawAud) : {}
-        const bookImg = mapImg[bid] || {}
-        const bookTrans = mapTrans[bid] || {}
-        const bookNotes = mapNotes[bid] || {}
-        const bookAud = mapAud[bid] || {}
-        for (const p of slice) {
-          const pid = getParagraphId(p)
-          newImages[pid] = bookImg[pid] || (newImages[pid] || [])
-          const cachedTrans = bookTrans[pid]
-          if (typeof cachedTrans === 'string' && cachedTrans.length > 0) {
-            newTrans[pid] = cachedTrans
-          } else {
-            newTrans[pid] = typeof newTrans[pid] === 'string' ? newTrans[pid] : ''
-          }
-          newNotes[pid] = bookNotes[pid] || (newNotes[pid] || [])
-          const list = bookAud[pid] || []
-          newAud[pid] = list.length > 0 ? list.map((a: any) => ({ id: a.id, audio_url: a.audio_url })) : (newAud[pid] || [])
-        }
-      } catch { }
     }
     setMergedImagesMap(newImages)
     setMergedTranslationsMap(newTrans)
@@ -552,19 +498,6 @@ export default function Reader() {
         setIsParagraphsLoading(true)
         setParagraphs([])
         fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
-      } else {
-        setIsParagraphsLoading(true)
-        setParagraphs([])
-        try {
-          const raw = localStorage.getItem('demo_paragraphs')
-          if (raw && currentBook) {
-            const all = JSON.parse(raw)
-            const bookMap = all[currentBook.id] || {}
-            const list = bookMap[ch.id] || []
-            setParagraphs(list)
-          }
-        } catch { }
-        setIsParagraphsLoading(false)
       }
     }
   }
@@ -597,31 +530,8 @@ export default function Reader() {
         } else {
           setIsParagraphsLoading(true)
           setParagraphs([])
-          // Try local cache first to show partial content quickly
-          try {
-            const raw = localStorage.getItem('demo_paragraphs')
-            if (raw && currentBook) {
-              const all = JSON.parse(raw)
-              const bookMap = all[currentBook.id] || {}
-              const list = bookMap[ch.id] || []
-              if (list && list.length > 0) setParagraphs(list)
-            }
-          } catch { }
           fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
         }
-      } else {
-        setIsParagraphsLoading(true)
-        setParagraphs([])
-        try {
-          const raw = localStorage.getItem('demo_paragraphs')
-          if (raw && currentBook) {
-            const all = JSON.parse(raw)
-            const bookMap = all[currentBook.id] || {}
-            const list = bookMap[ch.id] || []
-            setParagraphs(list)
-          }
-        } catch { }
-        setIsParagraphsLoading(false)
       }
     }
   }
@@ -632,7 +542,7 @@ export default function Reader() {
     if (idx >= 0 && idx < chapters.length - 1) {
       const next = chapters[idx + 1]
       if (preloadedParas[next.id] && Array.isArray(preloadedParas[next.id]) && preloadedParas[next.id].length > 0) return
-      if (isSupabaseConfigured && supabase && (!supabaseDown || cloudOnly) && currentBook) {
+      if (isSupabaseConfigured && supabase && currentBook) {
         try {
           const { data } = await supabase
             .from('paragraphs')
@@ -641,16 +551,6 @@ export default function Reader() {
             .order('order_index', { ascending: true })
           if (data && Array.isArray(data) && data.length > 0) {
             setPreloadedParas(prev => ({ ...prev, [next.id]: data }))
-          }
-        } catch { }
-      } else {
-        try {
-          const raw = localStorage.getItem('demo_paragraphs')
-          if (raw && currentBook) {
-            const all = JSON.parse(raw)
-            const bookMap = all[currentBook.id] || {}
-            const list = bookMap[next.id] || []
-            if (list && list.length > 0) setPreloadedParas(prev => ({ ...prev, [next.id]: list }))
           }
         } catch { }
       }
@@ -674,19 +574,9 @@ export default function Reader() {
     }
 
     if ((bookId && (!currentBook || currentBook.id !== bookId))) {
-      // Try to resolve currentBook from store or localStorage
       const storeBook = (useBooksStore.getState().books || []).find(b => b.id === bookId)
       if (storeBook) {
         setCurrentBook(storeBook)
-      } else {
-        try {
-          const raw = localStorage.getItem('demo_books')
-          if (raw) {
-            const list = JSON.parse(raw)
-            const found = list.find((b: any) => b.id === bookId)
-            if (found) setCurrentBook(found)
-          }
-        } catch { }
       }
       try {
         setParagraphs([])
@@ -711,28 +601,6 @@ export default function Reader() {
     if (currentBook && !currentChapter) {
       if (isSupabaseConfigured) {
         fetchChapters(currentBook.id)
-      } else {
-        setIsParagraphsLoading(true)
-        try {
-          const rawCh = localStorage.getItem('demo_chapters')
-          const rawPara = localStorage.getItem('demo_paragraphs')
-          const mapCh = rawCh ? JSON.parse(rawCh) : {}
-          const mapPara = rawPara ? JSON.parse(rawPara) : {}
-          const chList = mapCh[currentBook.id] || []
-          if (chList.length > 0) {
-            const saved = loadReadingStateLocal()
-            const target = saved?.chapterId ? (chList.find(c => c.id === saved.chapterId) || chList[0]) : chList[0]
-            setCurrentChapter(target)
-            const chapterParasMap = mapPara[currentBook.id] || {}
-            const paraList = chapterParasMap[target.id] || []
-            if (paraList.length > 0) {
-              setParagraphs(paraList)
-              const idx = Math.max(0, Math.min(saved?.paragraphIndex ?? 0, paraList.length - 1))
-              setCurrentParagraphIndex(idx)
-            }
-          }
-        } catch { }
-        setIsParagraphsLoading(false)
       }
     }
   }, [user, navigate, currentBook, bookId, setCurrentBook, setCurrentChapter, setParagraphs])
@@ -772,7 +640,6 @@ export default function Reader() {
     if (isSupabaseConfigured && !currentChapter && chapters.length > 0) {
       (async () => {
         let saved = await loadReadingStateRemote()
-        if (!saved) { saved = loadReadingStateLocal() }
         const ch = saved?.chapterId ? (chapters.find(c => c.id === saved.chapterId) || chapters[0]) : chapters[0]
         setCurrentChapter(ch)
         const idx = Math.max(0, saved?.paragraphIndex ?? 0)
@@ -791,17 +658,7 @@ export default function Reader() {
           const target = (useBooksStore.getState().chapters || []).find(c => c.id === saved.chapterId)
           if (target) {
             setCurrentChapter(target)
-            try {
-              const rawPara = localStorage.getItem('demo_paragraphs')
-              const mapPara = rawPara ? JSON.parse(rawPara) : {}
-              const bookId = getBookKey()
-              const chapterParasMap = mapPara[bookId] || {}
-              const list = chapterParasMap[target.id] || []
-              if (Array.isArray(list) && list.length > 0) {
-                setParagraphs(list)
-              }
-            } catch { }
-            if (isSupabaseConfigured && !supabaseDown) {
+            if (isSupabaseConfigured) {
               setIsParagraphsLoading(true)
               fetchParagraphs(target.id).finally(() => setIsParagraphsLoading(false))
             }
@@ -1633,22 +1490,7 @@ export default function Reader() {
 
   useEffect(() => {
     if (paragraphs.length > 0) {
-      const saved = loadReadingStateLocal()
-      if (!appliedSavedMerge && saved && typeof saved.mergedStart === 'number' && typeof saved.mergedEnd === 'number') {
-        const s = Math.max(0, Math.min(saved.mergedStart, paragraphs.length - 1))
-        const e = Math.max(s, Math.min(saved.mergedEnd, paragraphs.length - 1))
-        setMergedStart(s)
-        setMergedEnd(e)
-        setCurrentParagraphIndex(s)
-        setAppliedSavedMerge(true)
-        setMergedImagesMap({})
-        setMergedNotesMap({})
-        setHiddenMergedIds([])
-        setDeleteMenuPid(null)
-        ensureMergedData(s, e)
-      } else {
-        ensureMergedData(mergedStart, mergedEnd)
-      }
+      ensureMergedData(mergedStart, mergedEnd)
     }
   }, [paragraphs, mergedStart, mergedEnd])
 
@@ -1672,23 +1514,15 @@ export default function Reader() {
   }, [paragraphs, mergedStart, mergedEnd, hiddenMergedIds])
 
   useEffect(() => {
-    saveReadingStateLocal()
     saveReadingStateRemote()
   }, [currentBook, currentChapter, currentParagraphIndex, mergedStart, mergedEnd])
 
   useEffect(() => {
-    const onBeforeUnload = () => { try { saveReadingStateLocal() } catch { } }
-    const onVisibility = () => { try { if (document.visibilityState === 'hidden') saveReadingStateLocal() } catch { } }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      window.removeEventListener('beforeunload', onBeforeUnload)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
+    return () => {}
   }, [currentBook, currentChapter, currentParagraphIndex, mergedStart, mergedEnd])
 
   useEffect(() => {
-    return () => { try { saveReadingStateLocal(); saveReadingStateRemote() } catch { } }
+    return () => { try { saveReadingStateRemote() } catch { } }
   }, [])
 
   useEffect(() => {
@@ -1799,24 +1633,11 @@ export default function Reader() {
                     setMergedNotesMap({})
                     setMergedAudiosMap({})
                     setShowTranslation(false)
-                    if (isSupabaseConfigured && currentBook) {
-                      fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
-                    } else {
-                      try {
-                        const raw = localStorage.getItem('demo_paragraphs')
-                        if (raw && currentBook) {
-                          const all = JSON.parse(raw)
-                          const bookMap = all[currentBook.id] || {}
-                          const list = bookMap[ch.id] || []
-                          setParagraphs(list)
-                        } else {
-                          setParagraphs([])
-                        }
-                      } catch {
-                        setParagraphs([])
-                      }
-                      setIsParagraphsLoading(false)
-                    }
+                if (isSupabaseConfigured && currentBook) {
+                  fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
+                } else {
+                  setIsParagraphsLoading(false)
+                }
                   }
                 }}
                 title={currentChapter?.title || ''}
