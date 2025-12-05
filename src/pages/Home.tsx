@@ -314,7 +314,7 @@ export default function Home() {
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <Book className="h-9 w-9 text-amber-600" />
-              <h1 className="ml-3 text-3xl font-semibold tracking-tight text-[#2D3748]">亲子阅读助手</h1>
+              <h1 className="ml-3 text-3xl font-semibold tracking-tight text-[#2D3748]">亲子阅读时光</h1>
             </div>
             <div className="relative">
               <button
@@ -443,7 +443,7 @@ export default function Home() {
                       <div className="mt-2 text-sm font-medium text-[#2D3748] truncate">{book.title}</div>
                       <div className="text-xs text-[#4A5568] truncate">{book.author || '未知作者'}</div>
                       {s && (
-                        <div className="mt-1 text-[11px] text-[#4A5568] line-clamp-2">{(ct ? `《${ct}》` : '上次章节') + ' · 第 ' + Math.max(1, curr) + ' 段'}</div>
+                        <div className="mt-1 text-[11px] text-[#4A5568] line-clamp-2">{ct && ct.length > 0 ? ct : '上次章节'}</div>
                       )}
                     </div>
                   </div>

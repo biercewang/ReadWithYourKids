@@ -35,7 +35,7 @@ export default function Login() {
           <div className="mx-auto h-12 w-12 bg-blue-600 rounded-lg flex items-center justify-center">
             <Book className="h-8 w-8 text-white" />
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">亲子阅读助手</h2>
+          <h2 className="mt-6 text-3xl font-bold text-gray-900">亲子阅读时光</h2>
           <p className="mt-2 text-sm text-gray-600">与孩子一起享受阅读的乐趣</p>
         </div>
         
