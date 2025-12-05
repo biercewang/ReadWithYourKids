@@ -28,6 +28,7 @@ export default function Home() {
   const [chapterParaCountsCloud, setChapterParaCountsCloud] = useState<Record<string, number>>({})
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [cardMenuOpenId, setCardMenuOpenId] = useState<string | null>(null)
+  const [uploadErrorInfo, setUploadErrorInfo] = useState<{ step: string; status?: number; message: string } | null>(null)
 
   useEffect(() => {
     if (!authLoading) {
@@ -112,6 +113,7 @@ export default function Home() {
     if (!user) return
     
     setIsUploading(true)
+    setUploadErrorInfo(null)
     try {
       const lower = file.name.toLowerCase()
       let parsed: { title: string; author?: string; cover?: string; chapters: { title: string; paragraphs: { content: string; orderIndex: number }[] }[] }
@@ -119,13 +121,17 @@ export default function Home() {
         try {
           parsed = await parseMarkdownFile(file)
         } catch (e) {
-          throw new Error(`解析Markdown失败: ${e instanceof Error ? e.message : String(e)}`)
+          const msg = e instanceof Error ? e.message : String(e)
+          setUploadErrorInfo({ step: 'parse_markdown', message: msg })
+          throw new Error(`解析Markdown失败: ${msg}`)
         }
       } else if (lower.endsWith('.epub')) {
         try {
           parsed = await EPUBParser.parseBook(file)
         } catch (e) {
-          throw new Error(`解析EPUB失败: ${e instanceof Error ? e.message : String(e)}`)
+          const msg = e instanceof Error ? e.message : String(e)
+          setUploadErrorInfo({ step: 'parse_epub', message: msg })
+          throw new Error(`解析EPUB失败: ${msg}`)
         }
       } else {
         alert('请上传Markdown(.md)或EPUB(.epub)文件')
@@ -137,13 +143,19 @@ export default function Home() {
           try {
             const fileName = `${user.id}/${Date.now()}-${file.name}`
             const { data: uploadData, error: uploadError } = await supabase.storage.from('books').upload(fileName, file)
-            if (uploadError) throw uploadError
+            if (uploadError) {
+              setUploadErrorInfo({ step: 'storage_upload', status: (uploadError as any)?.status as number, message: (uploadError as any)?.message || '上传存储失败' })
+              throw uploadError
+            }
             const { data: bookData, error: bookError } = await supabase
               .from('books')
               .insert([{ user_id: user.id, title: parsed.title || file.name.replace('.md', ''), author: parsed.author, metadata: { fileName: file.name, fileSize: file.size, uploadPath: uploadData.path } }])
               .select()
               .single()
-            if (bookError) throw bookError
+            if (bookError) {
+              setUploadErrorInfo({ step: 'books_insert', status: (bookError as any)?.status as number, message: (bookError as any)?.message || '创建书籍记录失败' })
+              throw bookError
+            }
             if (bookData && parsed.cover && parsed.cover.startsWith('data:image/')) {
               const m = parsed.cover.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/) as RegExpMatchArray | null
               const mime = (m && m[1]) ? m[1] : 'image/jpeg'
@@ -161,17 +173,25 @@ export default function Home() {
                 if (url && url.length > 0) {
                   await supabase.from('books').update({ cover_url: url }).eq('id', bookData.id)
                 }
+              } else {
+                setUploadErrorInfo({ step: 'cover_upload', status: (coverErr as any)?.status as number, message: (coverErr as any)?.message || '封面上传失败' })
               }
             }
             const chRows = (parsed.chapters || []).map((c, idx) => ({ book_id: bookData.id, title: c.title || `(${idx + 1})`, order_index: idx + 1 }))
             const { error: chErr } = await supabase.from('chapters').insert(chRows)
-            if (chErr) throw chErr
+            if (chErr) {
+              setUploadErrorInfo({ step: 'chapters_insert', status: (chErr as any)?.status as number, message: (chErr as any)?.message || '创建章节失败' })
+              throw chErr
+            }
             const { data: fetchedCh, error: chFetchErr } = await supabase
               .from('chapters')
               .select('*')
               .eq('book_id', bookData.id)
               .order('order_index', { ascending: true })
-            if (chFetchErr) throw chFetchErr
+            if (chFetchErr) {
+              setUploadErrorInfo({ step: 'chapters_fetch', status: (chFetchErr as any)?.status as number, message: (chFetchErr as any)?.message || '获取章节失败' })
+              throw chFetchErr
+            }
             const allParas = [] as { chapter_id: string; content: string; order_index: number }[]
             for (let i = 0; i < (parsed.chapters || []).length; i++) {
               const c = parsed.chapters[i]
@@ -184,7 +204,10 @@ export default function Home() {
               for (let i = 0; i < allParas.length; i += batchSize) {
                 const batch = allParas.slice(i, i + batchSize)
                 const { error: pErr } = await supabase.from('paragraphs').insert(batch)
-                if (pErr) throw pErr
+                if (pErr) {
+                  setUploadErrorInfo({ step: 'paragraphs_insert', status: (pErr as any)?.status as number, message: (pErr as any)?.message || '创建段落失败' })
+                  throw pErr
+                }
               }
             }
             setCurrentBook(bookData)
@@ -196,17 +219,19 @@ export default function Home() {
             navigate(`/reader/${bookData.id}?fresh=1`)
             return
           } catch (e) {
-            alert('当前仅支持云端模式，请稍后重试或检查网络/登录状态')
+            const msg = e instanceof Error ? e.message : String(e)
+            alert(`上传失败（云端模式）：${msg}`)
             return
           }
         }
       }
-      // 云端模式强制：如果未登录或上传失败，则提示后终止
-      alert('云端模式已启用：请登录并确保云端可用后再上传')
+      // 云端模式强制：未登录/未配置云端
+      setUploadErrorInfo({ step: !isSupabaseConfigured ? 'supabase_config' : 'auth_session', message: !isSupabaseConfigured ? '未配置 Supabase 环境变量' : '未登录或会话失效' })
+      alert('请先登录并配置云端环境（Supabase）后再上传')
       return
     } catch (error) {
       console.error('Upload error:', error)
-      alert(error instanceof Error ? error.message : '上传失败，请重试')
+      alert(error instanceof Error ? `上传失败：${error.message}` : '上传失败，请重试')
     } finally {
       setIsUploading(false)
     }
@@ -347,6 +372,13 @@ export default function Home() {
 
         
 
+        {uploadErrorInfo && (
+          <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-3">
+            <div className="text-sm text-red-800">错误步骤：{uploadErrorInfo.step}</div>
+            <div className="text-xs text-red-700">错误代码：{typeof uploadErrorInfo.status === 'number' ? uploadErrorInfo.status : '-'}</div>
+            <div className="text-xs text-red-700 mt-1 break-words">错误信息：{uploadErrorInfo.message}</div>
+          </div>
+        )}
         {booksLoading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
