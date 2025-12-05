@@ -35,6 +35,15 @@ export default function Home() {
     }
   }, [authLoading, isAuthenticated, user, navigate, fetchBooks])
 
+  useEffect(() => {
+    try {
+      if (user && localStorage.getItem('home_refresh') === '1') {
+        fetchBooks(user.id)
+        localStorage.removeItem('home_refresh')
+      }
+    } catch {}
+  }, [user, fetchBooks])
+
   const handleFileUpload = async (file: File) => {
     if (!user) return
     

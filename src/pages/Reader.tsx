@@ -1715,7 +1715,7 @@ export default function Reader() {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center">
               <button
-                onClick={() => navigate('/')}
+                onClick={() => { try { localStorage.setItem('home_refresh', '1') } catch { } ; navigate('/') }}
                 className="mr-4 p-2 text-gray-600 hover:text-gray-900"
               >
                 <ArrowLeft className="h-5 w-5" />
