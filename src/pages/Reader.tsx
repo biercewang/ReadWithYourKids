@@ -737,6 +737,23 @@ export default function Reader() {
   }, [user, navigate, currentBook, bookId, setCurrentBook, setCurrentChapter, setParagraphs])
 
   useEffect(() => {
+    if (!bookId) return
+    setCurrentParagraphIndex(0)
+    setMergedStart(0)
+    setMergedEnd(0)
+    setSelectedIds([])
+    setAppliedSavedIndex(false)
+    setAppliedSavedMerge(false)
+    setMergedImagesMap({})
+    setMergedTranslationsMap({})
+    setMergedNotesMap({})
+    setMergedAudiosMap({})
+    setHiddenMergedIds([])
+    setDeleteMenuPid(null)
+    setIsParagraphsLoading(true)
+  }, [bookId])
+
+  useEffect(() => {
     if (isSupabaseConfigured && !currentChapter && chapters.length > 0) {
       (async () => {
         let saved = await loadReadingStateRemote()

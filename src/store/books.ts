@@ -155,7 +155,7 @@ export const useBooksStore = create<BooksState>((set, get) => ({
   },
 
   setCurrentBook: (book: Book) => {
-    set({ currentBook: book })
+    set({ currentBook: book, currentChapter: null, chapters: [], paragraphs: [] })
   },
 
   setCurrentChapter: (chapter: Chapter | null) => {
