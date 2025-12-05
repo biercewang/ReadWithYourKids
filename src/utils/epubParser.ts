@@ -121,7 +121,7 @@ export class EPUBParser {
             }
           }
         }
-      } catch {}
+      } catch { coverDataUrl = undefined }
 
       const tocEntries = await EPUBParser.getTocEntriesFromOpf(zip, opf, basePath)
       if (tocEntries.length > 0) {

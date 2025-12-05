@@ -639,6 +639,16 @@ export default function Reader() {
   useEffect(() => {
     if (isSupabaseConfigured && !currentChapter && chapters.length > 0) {
       (async () => {
+        const params = new URLSearchParams(routerLocation.search || '')
+        const fresh = params.get('fresh') === '1'
+        if (fresh) {
+          const ch = chapters[0]
+          setCurrentChapter(ch)
+          setCurrentParagraphIndex(0)
+          setIsParagraphsLoading(true)
+          fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
+          return
+        }
         let saved = await loadReadingStateRemote()
         const ch = saved?.chapterId ? (chapters.find(c => c.id === saved.chapterId) || chapters[0]) : chapters[0]
         setCurrentChapter(ch)
@@ -648,7 +658,7 @@ export default function Reader() {
         fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
       })()
     }
-  }, [chapters, currentChapter])
+  }, [chapters, currentChapter, routerLocation.search])
 
   useEffect(() => {
     (async () => {

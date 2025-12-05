@@ -96,6 +96,18 @@ export default function Home() {
     })()
   }, [isSupabaseConfigured, user, readingStatesCloud])
 
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null
+      const insideAvatar = !!t && (!!t.closest('.avatar-menu') || !!t.closest('.avatar-menu-trigger'))
+      const insideCardMenu = !!t && (!!t.closest('.book-card-menu') || !!t.closest('.book-card-menu-trigger'))
+      if (!insideAvatar) setAvatarMenuOpen(false)
+      if (!insideCardMenu) setCardMenuOpenId(null)
+    }
+    document.addEventListener('click', onDocClick)
+    return () => { document.removeEventListener('click', onDocClick) }
+  }, [])
+
   const handleFileUpload = async (file: File) => {
     if (!user) return
     
@@ -128,10 +140,29 @@ export default function Home() {
             if (uploadError) throw uploadError
             const { data: bookData, error: bookError } = await supabase
               .from('books')
-              .insert([{ user_id: user.id, title: parsed.title || file.name.replace('.md', ''), author: parsed.author, cover_url: parsed.cover, metadata: { fileName: file.name, fileSize: file.size, uploadPath: uploadData.path } }])
+              .insert([{ user_id: user.id, title: parsed.title || file.name.replace('.md', ''), author: parsed.author, metadata: { fileName: file.name, fileSize: file.size, uploadPath: uploadData.path } }])
               .select()
               .single()
             if (bookError) throw bookError
+            if (bookData && parsed.cover && parsed.cover.startsWith('data:image/')) {
+              const m = parsed.cover.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/) as RegExpMatchArray | null
+              const mime = (m && m[1]) ? m[1] : 'image/jpeg'
+              const ext = (mime.split('/')[1] || 'jpeg').replace(/[^a-z0-9]+/gi, '')
+              const parts = parsed.cover.split(',')
+              const bstr = atob(parts[1] || '')
+              const bytes = new Uint8Array(bstr.length)
+              for (let i = 0; i < bstr.length; i++) bytes[i] = bstr.charCodeAt(i)
+              const blob = new Blob([bytes], { type: mime })
+              const coverPath = `${user.id}/covers/${bookData.id}.${ext}`
+              const { error: coverErr } = await supabase.storage.from('books').upload(coverPath, blob, { upsert: true })
+              if (!coverErr) {
+                const { data: pub } = supabase.storage.from('books').getPublicUrl(coverPath)
+                const url = (pub?.publicUrl || '')
+                if (url && url.length > 0) {
+                  await supabase.from('books').update({ cover_url: url }).eq('id', bookData.id)
+                }
+              }
+            }
             const chRows = (parsed.chapters || []).map((c, idx) => ({ book_id: bookData.id, title: c.title || `(${idx + 1})`, order_index: idx + 1 }))
             const { error: chErr } = await supabase.from('chapters').insert(chRows)
             if (chErr) throw chErr
@@ -287,13 +318,13 @@ export default function Home() {
             <div className="relative">
               <button
                 onClick={() => setAvatarMenuOpen(v => !v)}
-                className="w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center text-[#2D3748]"
+                className="avatar-menu-trigger w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center text-[#2D3748]"
                 style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
               >
                 <span className="text-sm font-medium">{(user?.name || 'U').slice(0, 1).toUpperCase()}</span>
               </button>
               {avatarMenuOpen && (
-                <div className="absolute right-0 mt-2 w-44 rounded-xl bg-white shadow-lg ring-1 ring-black/5 py-2" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                <div className="avatar-menu absolute right-0 mt-2 w-44 rounded-xl bg-white shadow-lg ring-1 ring-black/5 py-2" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
                   <button
                     onClick={() => { setAvatarMenuOpen(false); setChangePwdOpen(true); setChangeError(''); setChangeOk(''); setCurrPwd(''); setNewPwd(''); setConfirmPwd('') }}
                     className="w-full text-left px-3 py-2 text-sm text-[#2D3748] hover:bg-amber-50"
@@ -340,7 +371,7 @@ export default function Home() {
               </div>
             )}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-              <div className="group relative rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+              <div className="group relative rounded-xl bg-white overflow-hidden transition-transform hover:-translate-y-1" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
                 <label htmlFor="file-upload" className="cursor-pointer block w-full h-full">
                   <div className="flex flex-col items-center justify-center" style={{ height: '100%' }}>
                     <div className="w-full" style={{ aspectRatio: '2 / 3' }}>
@@ -370,7 +401,7 @@ export default function Home() {
                   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
                 })()
                 return (
-                  <div key={book.id} className="group relative rounded-xl bg-white overflow-hidden transition-all" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                  <div key={book.id} className="group relative rounded-xl bg-white overflow-hidden transition-transform hover:-translate-y-1" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
                     <div className="w-full" style={{ aspectRatio: '2 / 3' }}>
                       <img src={coverSrc} alt={book.title} className="w-full h-full object-cover" />
                       <button
@@ -386,15 +417,15 @@ export default function Home() {
                       <div className="absolute right-3 top-3">
                         <button
                           onClick={(e) => { e.stopPropagation(); setCardMenuOpenId(id => (id === book.id ? null : book.id)) }}
-                          className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm text-[#2D3748] inline-flex items-center justify-center"
+                          className="book-card-menu-trigger w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm text-[#2D3748] inline-flex items-center justify-center"
                           aria-label="更多操作"
                           title="更多操作"
                         >
                           <MoreHorizontal className="h-5 w-5" />
                         </button>
                         {cardMenuOpenId === book.id && (
-                          <div className="absolute right-0 mt-2 w-36 rounded-xl bg-white shadow-lg ring-1 ring-black/5 py-2" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
-                            <button onClick={() => { setCardMenuOpenId(null); handleContinueReading(book) }} className="w-full text-left px-3 py-2 text-sm text-[#2D3748] hover:bg-amber-50">继续阅读</button>
+                          <div className="book-card-menu absolute right-0 mt-2 w-36 rounded-xl bg-white shadow-lg ring-1 ring-black/5 py-2" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                            <button onClick={() => { setCardMenuOpenId(null); handleStartReading(book) }} className="w-full text-left px-3 py-2 text-sm text-[#2D3748] hover:bg-amber-50">从头阅读</button>
                             <button onClick={() => { setCardMenuOpenId(null); handleDelete(book) }} className="w-full text-left px-3 py-2 text-sm text-[#2D3748] hover:bg-amber-50">删除</button>
                           </div>
                         )}
