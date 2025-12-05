@@ -1744,7 +1744,7 @@ export default function Reader() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Main Reading Area */}
         <div className="lg:col-span-3">
-          <div className={`${readerTheme === 'yellow' ? 'bg-amber-50' : readerTheme === 'green' ? 'bg-green-50' : readerTheme === 'grayWhite' ? 'bg-gray-700' : readerTheme === 'blackWhite' ? 'bg-black' : 'bg-white'} rounded-lg shadow-md p-8 mb-6 w-full relative`}>
+          <div className={`${readerTheme === 'yellow' ? 'bg-amber-50' : readerTheme === 'green' ? 'bg-green-50' : readerTheme === 'grayWhite' ? 'bg-gray-700' : readerTheme === 'lightGrayWhite' ? 'bg-gray-600' : readerTheme === 'blackWhite' ? 'bg-black' : 'bg-white'} rounded-lg shadow-md p-8 mb-6 w-full relative`}>
             <div className="w-full">
                 {isParagraphsLoading && paragraphs.length === 0 ? (
                   <div className="text-center text-gray-600 py-12">
@@ -1777,9 +1777,9 @@ export default function Reader() {
                               <div key={pid} className={`group w-full rounded-md p-3 relative`}>
                             <div className="flex items-start">
                               <div className="flex-1 pr-2">
-                                <p className={`leading-relaxed ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' ? 'text-white' : 'text-gray-800'} w-full whitespace-pre-wrap break-words`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>{p.content}</p>
+                                <p className={`leading-relaxed ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'text-white' : (readerTheme === 'whiteBlack' ? 'text-black' : 'text-gray-800')} w-full whitespace-pre-wrap break-words`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>{p.content}</p>
                                 {tText && (
-                                  <div className="mt-2 bg-blue-50 border border-blue-200 rounded-md p-2 text-sm text-blue-900 whitespace-pre-wrap break-words">{tText}</div>
+                                  <div className={`mt-2 rounded-md p-2 whitespace-pre-wrap break-words border ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'bg-white/10 text-white border-white/20' : 'bg-slate-100 text-slate-800 border-slate-300'}`} style={{ fontSize: Math.max(10, readerFontSize - 2), fontFamily: readerFontFamily }}>{tText}</div>
                                 )}
                                 {imgUrl && (
                                   <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
@@ -1940,7 +1940,20 @@ export default function Reader() {
                       <div className="mb-2">
                         <div className="text-xs text-slate-600 mb-1">待阅读文本</div>
                         <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
-                          {preview && preview.length > 0 ? preview : <span className="text-slate-400">请在左侧选中段落文本</span>}
+                          {(() => {
+                            const segments = ids.map(id => {
+                              const p = paragraphs.find(pp => getParagraphId(pp) === id)
+                              return (p?.content || '').trim()
+                            }).filter(s => s && s.length > 0)
+                            if (segments.length === 0) return <span className="text-slate-400">请在左侧选中段落文本</span>
+                            return (
+                              <div>
+                                {segments.map((s, i) => (
+                                  <div key={i} style={{ WebkitLineClamp: 2 as any, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', display: '-webkit-box' }}>{s}</div>
+                                ))}
+                              </div>
+                            )
+                          })()}
                         </div>
                       </div>
                     )
@@ -2033,20 +2046,30 @@ export default function Reader() {
                       <option value="Georgia, serif">Georgia</option>
                       <option value="'Times New Roman', serif">Times New Roman</option>
                       <option value="Arial, sans-serif">Arial</option>
+                      <option value="'Helvetica Neue', Helvetica, Arial, sans-serif">Helvetica</option>
+                      <option value="Verdana, Geneva, sans-serif">Verdana</option>
+                      <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                      <option value="Palatino, 'Palatino Linotype', 'Book Antiqua', serif">Palatino</option>
+                      <option value="Garamond, serif">Garamond</option>
+                      <option value="'Courier New', Courier, monospace">Courier New</option>
+                      <option value="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif">Segoe UI</option>
+                      <option value="Calibri, 'Segoe UI', Arial, sans-serif">Calibri</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-slate-700 text-xs mb-1">背景色</label>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <button onClick={() => { setReaderTheme('whiteBlack'); try { localStorage.setItem('reader_theme', 'whiteBlack') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'whiteBlack' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-white text-black`}>Aa</button>
                       <button onClick={() => { setReaderTheme('yellow'); try { localStorage.setItem('reader_theme', 'yellow') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'yellow' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-amber-50 text-slate-900`}>Aa</button>
                       <button onClick={() => { setReaderTheme('green'); try { localStorage.setItem('reader_theme', 'green') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'green' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-green-50 text-slate-900`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('lightGrayWhite'); try { localStorage.setItem('reader_theme', 'lightGrayWhite') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'lightGrayWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-gray-600 text-white`}>Aa</button>
                       <button onClick={() => { setReaderTheme('grayWhite'); try { localStorage.setItem('reader_theme', 'grayWhite') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'grayWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-gray-700 text-white`}>Aa</button>
                       <button onClick={() => { setReaderTheme('blackWhite'); try { localStorage.setItem('reader_theme', 'blackWhite') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'blackWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-black text-white`}>Aa</button>
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-md p-3 bg-slate-50">
                     <div className="text-xs text-slate-600 mb-1">预览</div>
-                    <div className={`${readerTheme === 'yellow' ? 'bg-amber-50' : readerTheme === 'green' ? 'bg-green-50' : readerTheme === 'grayWhite' ? 'bg-gray-700' : readerTheme === 'blackWhite' ? 'bg-black' : 'bg-white'} rounded-md p-3 ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' ? 'text-white' : 'text-slate-800'}`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>
+                    <div className={`${readerTheme === 'yellow' ? 'bg-amber-50' : readerTheme === 'green' ? 'bg-green-50' : readerTheme === 'grayWhite' ? 'bg-gray-700' : readerTheme === 'lightGrayWhite' ? 'bg-gray-600' : readerTheme === 'blackWhite' ? 'bg-black' : 'bg-white'} rounded-md p-3 ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'text-white' : (readerTheme === 'whiteBlack' ? 'text-black' : 'text-slate-800')}`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>
                       这是一段示例文本，用于预览当前设置。
                     </div>
                   </div>
@@ -2099,7 +2122,20 @@ export default function Reader() {
                     <div className="mb-2">
                       <div className="text-xs text-slate-600 mb-1">待翻译文本</div>
                       <div className="border border-slate-200 rounded-md p-2 bg-white text-xs text-slate-800 whitespace-pre-wrap break-words min-h-[48px]">
-                        {preview && preview.length > 0 ? preview : <span className="text-slate-400">请在左侧选中段落文本</span>}
+                        {(() => {
+                          const segments = ids.map(id => {
+                            const p = paragraphs.find(pp => getParagraphId(pp) === id)
+                            return (p?.content || '').trim()
+                          }).filter(s => s && s.length > 0)
+                          if (segments.length === 0) return <span className="text-slate-400">请在左侧选中段落文本</span>
+                          return (
+                            <div>
+                              {segments.map((s, i) => (
+                                <div key={i} style={{ WebkitLineClamp: 2 as any, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', display: '-webkit-box' }}>{s}</div>
+                              ))}
+                            </div>
+                          )
+                        })()}
                       </div>
                     </div>
                   )
@@ -2122,8 +2158,8 @@ export default function Reader() {
                   const tText = mergedTranslationsMap[targetId] || storeText
                   if (tText && tText.length > 0) {
                     return (
-                      <div className="mt-3 border border-blue-200 rounded-md p-3 bg-blue-50 text-sm text-blue-900 whitespace-pre-wrap break-words">
-                        {tText}
+                      <div className="mt-3 border border-blue-200 rounded-md p-3 bg-blue-50 text-xs text-blue-900 whitespace-pre-wrap break-words">
+                        <div style={{ WebkitLineClamp: 2 as any, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', display: '-webkit-box' }}>{tText}</div>
                       </div>
                     )
                   }
