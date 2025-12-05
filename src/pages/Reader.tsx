@@ -535,12 +535,25 @@ export default function Reader() {
       const ch = chapters[idx - 1]
       setCurrentChapter(ch)
       setCurrentParagraphIndex(0)
+      setMergedStart(0)
+      setMergedEnd(0)
+      setSelectedIds([])
+      setHiddenMergedIds([])
+      setDeleteMenuPid(null)
+      setMergedImagesMap({})
+      setMergedTranslationsMap({})
+      setMergedNotesMap({})
+      setMergedAudiosMap({})
+      setAutoSelectedOnce(false)
+      setLoadingProgress(0)
       setShowTranslation(false)
       if (isSupabaseConfigured && currentBook) {
         setIsParagraphsLoading(true)
+        setParagraphs([])
         fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
       } else {
         setIsParagraphsLoading(true)
+        setParagraphs([])
         try {
           const raw = localStorage.getItem('demo_paragraphs')
           if (raw && currentBook) {
@@ -562,6 +575,17 @@ export default function Reader() {
       const ch = chapters[idx + 1]
       setCurrentChapter(ch)
       setCurrentParagraphIndex(0)
+      setMergedStart(0)
+      setMergedEnd(0)
+      setSelectedIds([])
+      setHiddenMergedIds([])
+      setDeleteMenuPid(null)
+      setMergedImagesMap({})
+      setMergedTranslationsMap({})
+      setMergedNotesMap({})
+      setMergedAudiosMap({})
+      setAutoSelectedOnce(false)
+      setLoadingProgress(0)
       setShowTranslation(false)
       if (isSupabaseConfigured && currentBook) {
         const cached = preloadedParas[ch.id]
@@ -571,6 +595,7 @@ export default function Reader() {
           setIsParagraphsLoading(false)
         } else {
           setIsParagraphsLoading(true)
+          setParagraphs([])
           // Try local cache first to show partial content quickly
           try {
             const raw = localStorage.getItem('demo_paragraphs')
@@ -585,6 +610,7 @@ export default function Reader() {
         }
       } else {
         setIsParagraphsLoading(true)
+        setParagraphs([])
         try {
           const raw = localStorage.getItem('demo_paragraphs')
           if (raw && currentBook) {
@@ -631,10 +657,10 @@ export default function Reader() {
   }
 
   useEffect(() => {
-    if (currentChapter && paragraphs.length > 0) {
+    if (currentChapter && paragraphs.length > 0 && !isParagraphsLoading) {
       preloadNextChapter()
     }
-  }, [currentChapter, paragraphs])
+  }, [currentChapter, paragraphs, isParagraphsLoading])
 
   useEffect(() => {
     preloadNextParagraphContent()
@@ -1701,8 +1727,8 @@ export default function Reader() {
                   const ci = currentChapter ? ((chapters || []).findIndex(c => c.id === currentChapter.id) + 1) : 0
                   const ct = (chapters || []).length
                   const p = r.start === r.end ? (r.start + 1) : `${r.start + 1}-${r.end + 1}`
-                  const loading = (isParagraphsLoading || loadingProgress < 100) ? ' · 加载中…' : ''
-                  const paraPart = (paragraphs.length > 0) ? ` · 段落 ${p} / ${paragraphs.length}` : ''
+                  const loading = (isParagraphsLoading || loadingProgress < 100) ? ' 加载中…' : ''
+                  const paraPart = (paragraphs.length > 0) ? ` 段落 ${p} / ${paragraphs.length}` : ''
                   return (<p className="text-sm text-gray-600">章节 {ci} / {ct}{paraPart}{loading}</p>)
                 })()}
               </div>
