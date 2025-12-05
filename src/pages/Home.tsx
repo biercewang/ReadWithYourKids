@@ -115,6 +115,20 @@ export default function Home() {
     setIsUploading(true)
     setUploadErrorInfo(null)
     try {
+      const toSafeName = (name: string) => {
+        const trimmed = (name || '').trim()
+        const idx = trimmed.lastIndexOf('.')
+        const ext = idx >= 0 ? trimmed.slice(idx + 1).toLowerCase() : ''
+        const base = idx >= 0 ? trimmed.slice(0, idx) : trimmed
+        const normalized = base.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+        const ascii = normalized.replace(/[^a-zA-Z0-9\-_.\s]/g, '')
+        const dashed = ascii.replace(/\s+/g, '-')
+        const collapsed = dashed.replace(/-+/g, '-').replace(/^-|-$|^\.+|\.+$/g, '')
+        const lower = collapsed.toLowerCase()
+        const safeBase = lower.length > 0 ? lower.slice(0, 120) : 'book'
+        const safeExt = ext && ext.length > 0 ? ext : 'epub'
+        return `${safeBase}.${safeExt}`
+      }
       const lower = file.name.toLowerCase()
       let parsed: { title: string; author?: string; cover?: string; chapters: { title: string; paragraphs: { content: string; orderIndex: number }[] }[] }
       if (lower.endsWith('.md')) {
@@ -141,7 +155,8 @@ export default function Home() {
         const { data: sessionData } = await supabase.auth.getSession()
         if (sessionData?.session) {
           try {
-            const fileName = `${user.id}/${Date.now()}-${file.name}`
+            const safeName = toSafeName(file.name)
+            const fileName = `${user.id}/${Date.now()}-${safeName}`
             const { data: uploadData, error: uploadError } = await supabase.storage.from('books').upload(fileName, file)
             if (uploadError) {
               setUploadErrorInfo({ step: 'storage_upload', status: (uploadError as any)?.status as number, message: (uploadError as any)?.message || '上传存储失败' })
