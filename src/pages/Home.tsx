@@ -262,10 +262,11 @@ export default function Home() {
   }
   const confirmDelete = async () => {
     if (!user || !bookToDelete) return
+    const target = bookToDelete
+    setConfirmDeleteOpen(false)
+    setBookToDelete(null)
     try {
-      await deleteBook(bookToDelete.id, user.id)
-      setConfirmDeleteOpen(false)
-      setBookToDelete(null)
+      await deleteBook(target.id, user.id)
     } catch (e) {
       alert(e instanceof Error ? e.message : '删除失败，请重试')
     }
