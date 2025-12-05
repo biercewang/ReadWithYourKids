@@ -38,6 +38,7 @@ export default function Reader() {
   const [hoverSettings, setHoverSettings] = useState(false)
   const [readerFontSize, setReaderFontSize] = useState<number>(() => { try { const v = parseInt(localStorage.getItem('reader_font_size') || '18', 10); return isNaN(v) ? 18 : v } catch { return 18 } })
   const [readerFontFamily, setReaderFontFamily] = useState<string>(() => { try { return localStorage.getItem('reader_font_family') || 'system-ui' } catch { return 'system-ui' } })
+  const [readerTheme, setReaderTheme] = useState<string>(() => { try { return localStorage.getItem('reader_theme') || 'white' } catch { return 'white' } })
   const [translationProvider, setTranslationProvider] = useState<string>(() => {
     try {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('translation_provider') || '' : ''
@@ -1740,11 +1741,11 @@ export default function Reader() {
       </header>
 
       <div className="max-w-screen-2xl mx-auto px-6 lg:px-10 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Main Reading Area */}
-          <div className="lg:col-span-3">
-            <div className="bg-white rounded-lg shadow-md p-8 mb-6 w-full relative">
-              <div className="w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* Main Reading Area */}
+        <div className="lg:col-span-3">
+          <div className={`${readerTheme === 'yellow' ? 'bg-amber-50' : readerTheme === 'green' ? 'bg-green-50' : readerTheme === 'grayWhite' ? 'bg-gray-700' : readerTheme === 'blackWhite' ? 'bg-black' : 'bg-white'} rounded-lg shadow-md p-8 mb-6 w-full relative`}>
+            <div className="w-full">
                 {isParagraphsLoading && paragraphs.length === 0 ? (
                   <div className="text-center text-gray-600 py-12">
                     <div>读取中... {Math.round(Math.max(0, Math.min(100, loadingProgress)))}%</div>
@@ -1776,7 +1777,7 @@ export default function Reader() {
                               <div key={pid} className={`group w-full rounded-md p-3 relative`}>
                             <div className="flex items-start">
                               <div className="flex-1 pr-2">
-                                <p className="leading-relaxed text-gray-800 w-full whitespace-pre-wrap break-words" style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>{p.content}</p>
+                                <p className={`leading-relaxed ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' ? 'text-white' : 'text-gray-800'} w-full whitespace-pre-wrap break-words`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>{p.content}</p>
                                 {tText && (
                                   <div className="mt-2 bg-blue-50 border border-blue-200 rounded-md p-2 text-sm text-blue-900 whitespace-pre-wrap break-words">{tText}</div>
                                 )}
@@ -1812,13 +1813,15 @@ export default function Reader() {
                         })()}
                         <div ref={listBottomRef} />
                         { (currentParagraphIndex > 0 || mergedStart > 0) && (
-                          <button onClick={handlePreviousParagraph} aria-label="上一段" className="absolute left-0 top-0 bottom-0 w-6 bg-transparent text-slate-400 flex items-center justify-center hover:bg-slate-100 hover:rounded-md">
-                            <ChevronLeft className="h-4 w-4" />
+                          <button onClick={handlePreviousParagraph} aria-label="上一段" className="group absolute left-0 top-0 bottom-0 w-6 bg-transparent text-slate-400 hover:bg-slate-100 hover:rounded-md flex items-center justify-center">
+                            <span className="block group-hover:hidden text-sm font-bold -rotate-90">⌃</span>
+                            <span style={{ writingMode: 'vertical-rl' }} className="hidden group-hover:block text-xs font-bold">上 一 段</span>
                           </button>
                         )}
                         { (currentParagraphIndex < paragraphs.length - 1 || mergedEnd < paragraphs.length - 1) && (
-                          <button onClick={handleNextParagraph} aria-label="下一段" className="absolute right-0 top-0 bottom-0 w-6 bg-transparent text-slate-400 flex items-center justify-center hover:bg-slate-100 hover:rounded-md">
-                            <ChevronRight className="h-4 w-4" />
+                          <button onClick={handleNextParagraph} aria-label="下一段" className="group absolute right-0 top-0 bottom-0 w-6 bg-transparent text-slate-400 hover:bg-slate-100 hover:rounded-md flex items-center justify-center">
+                            <span className="block group-hover:hidden text-sm font-bold rotate-90">⌃</span>
+                            <span style={{ writingMode: 'vertical-rl' }} className="hidden group-hover:block text-xs font-bold">下 一 段</span>
                           </button>
                         )}
                       </div>
@@ -1829,29 +1832,32 @@ export default function Reader() {
                           <div className="grid grid-cols-3 gap-1">
                             <button
                               onClick={() => { const ne = Math.max(mergedStart, mergedEnd - 1); setMergedEnd(ne); ensureMergedData(mergedStart, ne) }}
-                              className="col-span-1 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
+                              className="group col-span-1 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
                               aria-label="缩小下方"
                               title="缩小下方"
                             >
-                              <ChevronUp className="h-4 w-4" />
+                              <span className="block group-hover:hidden text-sm font-bold">⌃</span>
+                              <span className="hidden group-hover:block text-xs font-bold">收缩阅读窗口</span>
                             </button>
                             <button
                               onClick={extendDown}
-                              className="col-span-2 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
+                              className="group col-span-2 h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
                               aria-label="向下扩展"
                               title="向下扩展"
                             >
-                              <ChevronDown className="h-4 w-4" />
+                              <span className="block group-hover:hidden text-sm font-bold rotate-180">⌃</span>
+                              <span className="hidden group-hover:block text-xs font-bold">拓展阅读窗口</span>
                             </button>
                           </div>
                         ) : (
                           <button
                             onClick={extendDown}
-                            className="w-full h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
+                            className="group w-full h-6 bg-transparent text-slate-400 text-xs rounded-md flex items-center justify-center hover:bg-slate-100"
                             aria-label="向下扩展"
                             title="向下扩展"
                           >
-                            <ChevronDown className="h-4 w-4" />
+                            <span className="block group-hover:hidden text-sm font-bold rotate-180">⌃</span>
+                            <span className="hidden group-hover:block text-xs font-bold">拓展阅读窗口</span>
                           </button>
                         )}
                       </div>
@@ -2029,9 +2035,18 @@ export default function Reader() {
                       <option value="Arial, sans-serif">Arial</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-slate-700 text-xs mb-1">背景色</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      <button onClick={() => { setReaderTheme('yellow'); try { localStorage.setItem('reader_theme', 'yellow') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'yellow' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-amber-50 text-slate-900`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('green'); try { localStorage.setItem('reader_theme', 'green') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'green' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-green-50 text-slate-900`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('grayWhite'); try { localStorage.setItem('reader_theme', 'grayWhite') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'grayWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-gray-700 text-white`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('blackWhite'); try { localStorage.setItem('reader_theme', 'blackWhite') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'blackWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-black text-white`}>Aa</button>
+                    </div>
+                  </div>
                   <div className="border border-slate-200 rounded-md p-3 bg-slate-50">
                     <div className="text-xs text-slate-600 mb-1">预览</div>
-                    <div className="text-slate-800" style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>
+                    <div className={`${readerTheme === 'yellow' ? 'bg-amber-50' : readerTheme === 'green' ? 'bg-green-50' : readerTheme === 'grayWhite' ? 'bg-gray-700' : readerTheme === 'blackWhite' ? 'bg-black' : 'bg-white'} rounded-md p-3 ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' ? 'text-white' : 'text-slate-800'}`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>
                       这是一段示例文本，用于预览当前设置。
                     </div>
                   </div>
