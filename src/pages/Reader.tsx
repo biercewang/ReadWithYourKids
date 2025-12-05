@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/auth'
 import { useBooksStore } from '../store/books'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
@@ -15,6 +15,7 @@ import { Note } from '../types/notes'
 export default function Reader() {
   const { bookId } = useParams<{ bookId: string }>()
   const navigate = useNavigate()
+  const routerLocation = useLocation()
   const { user } = useAuthStore()
   const { currentBook, currentChapter, chapters, paragraphs, fetchParagraphs, fetchChapters, setCurrentBook, setCurrentChapter, setParagraphs } = useBooksStore()
 
@@ -751,17 +752,21 @@ export default function Reader() {
     setHiddenMergedIds([])
     setDeleteMenuPid(null)
     setIsParagraphsLoading(true)
+    const params = new URLSearchParams(routerLocation.search || '')
+    const fresh = params.get('fresh') === '1'
     ;(async () => {
       try {
-        const saved = await getSavedState()
-        if (saved) {
-          if (typeof saved.paragraphIndex === 'number') setCurrentParagraphIndex(Math.max(0, saved.paragraphIndex))
-          if (typeof saved.mergedStart === 'number') setMergedStart(Math.max(0, saved.mergedStart))
-          if (typeof saved.mergedEnd === 'number') setMergedEnd(Math.max(0, saved.mergedEnd))
+        if (!fresh) {
+          const saved = await getSavedState()
+          if (saved) {
+            if (typeof saved.paragraphIndex === 'number') setCurrentParagraphIndex(Math.max(0, saved.paragraphIndex))
+            if (typeof saved.mergedStart === 'number') setMergedStart(Math.max(0, saved.mergedStart))
+            if (typeof saved.mergedEnd === 'number') setMergedEnd(Math.max(0, saved.mergedEnd))
+          }
         }
       } catch {}
     })()
-  }, [bookId])
+  }, [bookId, routerLocation.search])
 
   useEffect(() => {
     if (isSupabaseConfigured && !currentChapter && chapters.length > 0) {
@@ -806,6 +811,11 @@ export default function Reader() {
         if (typeof saved?.paragraphIndex === 'number') {
           const idx = Math.max(0, Math.min(saved.paragraphIndex, paragraphs.length - 1))
           setCurrentParagraphIndex(idx)
+          try {
+            const pid = getParagraphId(paragraphs[idx])
+            const el = document.getElementById(`para-${pid}`)
+            if (el) { el.scrollIntoView({ behavior: 'auto', block: 'center' }) }
+          } catch {}
         }
         setAppliedSavedIndex(true)
       }
@@ -1880,7 +1890,7 @@ export default function Reader() {
                             const nList = mergedNotesMap[pid] || []
                             const aList = mergedAudiosMap[pid] || []
                             return (
-                              <div key={pid} className={`group w-full rounded-md p-3 relative`}>
+                              <div id={`para-${pid}`} key={pid} className={`group w-full rounded-md p-3 relative`}>
                             <div className="flex items-start">
                               <div className="flex-1 pr-2">
                                 <p className={`leading-relaxed ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'text-white' : (readerTheme === 'whiteBlack' ? 'text-black' : 'text-gray-800')} w-full whitespace-pre-wrap break-words`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>{p.content}</p>

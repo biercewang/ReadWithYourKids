@@ -26,6 +26,8 @@ export default function Home() {
   const [changeOk, setChangeOk] = useState('')
   const [readingStates, setReadingStates] = useState<Record<string, { chapterId: string; paragraphIndex: number; mergedStart?: number; mergedEnd?: number }>>({})
   const [chapterTitles, setChapterTitles] = useState<Record<string, string>>({})
+  const [readingStatesCloud, setReadingStatesCloud] = useState<Record<string, { chapterId: string; paragraphIndex: number; mergedStart?: number; mergedEnd?: number; updatedAt?: string }>>({})
+  const [chapterTitlesCloud, setChapterTitlesCloud] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!authLoading) {
@@ -61,6 +63,36 @@ export default function Home() {
       setChapterTitles(ct)
     } catch {}
   }, [books])
+
+  useEffect(() => {
+    (async () => {
+      if (!isSupabaseConfigured || !user) return
+      try {
+        const { data: rp } = await supabase
+          .from('reading_progress')
+          .select('book_id, chapter_id, paragraph_index, merged_start, merged_end, updated_at')
+          .eq('user_id', user.id);
+        const map: Record<string, { chapterId: string; paragraphIndex: number; mergedStart?: number; mergedEnd?: number; updatedAt?: string }> = {};
+        const chIds: string[] = [];
+        (rp || []).forEach((row: any) => {
+          if (row && row.book_id) {
+            map[row.book_id] = { chapterId: row.chapter_id, paragraphIndex: row.paragraph_index || 0, mergedStart: row.merged_start, mergedEnd: row.merged_end, updatedAt: row.updated_at };
+            if (row.chapter_id) chIds.push(row.chapter_id);
+          }
+        });
+        setReadingStatesCloud(map);
+        if (chIds.length > 0) {
+          const { data: chRows } = await supabase
+            .from('chapters')
+            .select('id,title')
+            .in('id', Array.from(new Set(chIds)));
+          const ctm: Record<string, string> = {};
+          (chRows || []).forEach((c: any) => { if (c && c.id) ctm[c.id] = c.title || '' });
+          setChapterTitlesCloud(ctm);
+        }
+      } catch {}
+    })()
+  }, [isSupabaseConfigured, user, books])
 
   const handleFileUpload = async (file: File) => {
     if (!user) return
@@ -294,6 +326,15 @@ export default function Home() {
         }
       } catch {}
     }
+    if (isSupabaseConfigured) {
+      navigate(`/reader/${book.id}?fresh=1`)
+    } else {
+      navigate(`/reader/${book.id}`)
+    }
+  }
+
+  const handleContinueReading = (book: BookType) => {
+    setCurrentBook(book)
     navigate(`/reader/${book.id}`)
   }
 
@@ -419,11 +460,16 @@ export default function Home() {
                   <h3 className="font-semibold text-gray-900 mb-2 text-base">{book.title}</h3>
                   <p className="text-sm text-gray-600">{book.author || '未知作者'}</p>
                   {(() => {
-                    const s = readingStates[book.id]
+                    const s = isSupabaseConfigured ? readingStatesCloud[book.id] : readingStates[book.id]
                     if (!s) return null
-                    const ct = chapterTitles[s.chapterId] || ''
+                    const ctmap = isSupabaseConfigured ? chapterTitlesCloud : chapterTitles
+                    const ct = ctmap[s.chapterId] || ''
+                    const upd = isSupabaseConfigured && (s as any).updatedAt ? new Date((s as any).updatedAt) : null
                     return (
-                      <p className="text-xs text-gray-500 mt-1">继续阅读：{ct ? `《${ct}》` : '上次章节'} 第 {Math.max(1, (s.paragraphIndex || 0) + 1)} 段</p>
+                      <>
+                        <p className="text-xs text-gray-500 mt-1">继续阅读：{ct ? `《${ct}》` : '上次章节'} 第 {Math.max(1, (s.paragraphIndex || 0) + 1)} 段</p>
+                        {upd && <p className="text-xs text-gray-400">最近阅读：{upd.toLocaleString()}</p>}
+                      </>
                     )
                   })()}
                   <div className="flex space-x-2 mt-auto">
@@ -433,6 +479,12 @@ export default function Home() {
                     >
                       <Play className="h-4 w-4 mr-1" />
                       开始阅读
+                    </button>
+                    <button
+                      onClick={() => handleContinueReading(book)}
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                    >
+                      继续阅读
                     </button>
                     <button onClick={() => handleDelete(book)} className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                       <Trash2 className="h-4 w-4" />
