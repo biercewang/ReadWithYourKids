@@ -467,7 +467,7 @@ export default function Home() {
                     <div className="w-full" style={{ aspectRatio: '2 / 3' }}>
                       <img src={coverSrc} alt={book.title} className="w-full h-full object-cover" />
                       <button
-                        onClick={() => handleStartReading(book)}
+                        onClick={() => { const has = !!readingStatesCloud[book.id]; has ? handleContinueReading(book) : handleStartReading(book) }}
                         className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
                         aria-label="开始阅读"
                         title="开始阅读"
