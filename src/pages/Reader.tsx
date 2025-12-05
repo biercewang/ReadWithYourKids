@@ -363,6 +363,26 @@ export default function Reader() {
     return ids.length > 0 ? ids : [getCurrentParagraphId()].filter(Boolean) as string[]
   }
 
+  const getVisibleRange = () => {
+    const s = mergedStart
+    const e = Math.min(mergedEnd, Math.max(0, visibleLimit - 1))
+    const idxs: number[] = []
+    for (let i = s; i <= e; i++) {
+      const p = paragraphs[i]
+      if (!p) continue
+      const pid = getParagraphId(p)
+      if (!hiddenMergedIds.includes(pid)) idxs.push(i)
+    }
+    if (idxs.length === 0) return { start: currentParagraphIndex, end: currentParagraphIndex }
+    return { start: idxs[0], end: idxs[idxs.length - 1] }
+  }
+
+  const hasNextChapter = () => {
+    if (!currentChapter || !chapters || chapters.length === 0) return false
+    const idx = (chapters || []).findIndex(c => c.id === currentChapter.id)
+    return idx >= 0 && idx < (chapters || []).length - 1
+  }
+
   const getCombinedText = (ids: string[]) => {
     const parts = ids.map(pid => {
       const p = paragraphs.find(pp => getParagraphId(pp) === pid)
@@ -1676,7 +1696,15 @@ export default function Reader() {
               </button>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">{currentBook.title}</h1>
-                <p className="text-sm text-gray-600">段落 {mergedStart === mergedEnd ? (mergedStart + 1) : `${mergedStart + 1}-${mergedEnd + 1}`} / {paragraphs.length}</p>
+                {(() => {
+                  const r = getVisibleRange()
+                  const ci = currentChapter ? ((chapters || []).findIndex(c => c.id === currentChapter.id) + 1) : 0
+                  const ct = (chapters || []).length
+                  const p = r.start === r.end ? (r.start + 1) : `${r.start + 1}-${r.end + 1}`
+                  const loading = (isParagraphsLoading || loadingProgress < 100) ? ' · 加载中…' : ''
+                  const paraPart = (paragraphs.length > 0) ? ` · 段落 ${p} / ${paragraphs.length}` : ''
+                  return (<p className="text-sm text-gray-600">章节 {ci} / {ct}{paraPart}{loading}</p>)
+                })()}
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -1686,13 +1714,27 @@ export default function Reader() {
                   const ch = (useBooksStore.getState().chapters || []).find(c => c.id === e.target.value)
                   if (ch) {
                     setCurrentChapter(ch)
+                    setIsParagraphsLoading(true)
+                    const cached = preloadedParas[ch.id]
+                    if (cached && Array.isArray(cached) && cached.length > 0) {
+                      setParagraphs(cached)
+                    } else {
+                      setParagraphs([])
+                    }
                     setCurrentParagraphIndex(0)
+                    setMergedStart(0)
+                    setMergedEnd(0)
+                    setSelectedIds([])
+                    setHiddenMergedIds([])
+                    setDeleteMenuPid(null)
+                    setMergedImagesMap({})
+                    setMergedTranslationsMap({})
+                    setMergedNotesMap({})
+                    setMergedAudiosMap({})
                     setShowTranslation(false)
                     if (isSupabaseConfigured && currentBook) {
-                      setIsParagraphsLoading(true)
                       fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
                     } else {
-                      setIsParagraphsLoading(true)
                       try {
                         const raw = localStorage.getItem('demo_paragraphs')
                         if (raw && currentBook) {
@@ -1710,7 +1752,8 @@ export default function Reader() {
                     }
                   }
                 }}
-                className="px-3 py-2 rounded-md border border-slate-300 bg-white text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                title={currentChapter?.title || ''}
+                className="px-3 py-2 rounded-md border border-slate-300 bg-white text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64 truncate"
               >
                 {(useBooksStore.getState().chapters || []).map(c => (
                   <option key={c.id} value={c.id}>{c.title}</option>
@@ -1719,10 +1762,23 @@ export default function Reader() {
               {/* 章切换按钮已移除 */}
               <select
                 value={String(currentParagraphIndex + 1)}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const v = parseInt(e.target.value, 10)
                   if (!isNaN(v)) {
-                    setCurrentParagraphIndex(Math.max(0, Math.min(v - 1, paragraphs.length - 1)))
+                    const idx = Math.max(0, Math.min(v - 1, paragraphs.length - 1))
+                    setCurrentParagraphIndex(idx)
+                    setMergedStart(idx)
+                    setMergedEnd(idx)
+                    ensureMergedData(idx, idx)
+                    try {
+                      const vis = paragraphs
+                        .slice(idx, Math.min(idx + 1, paragraphs.length))
+                        .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
+                        .map(pp => getParagraphId(pp))
+                      setSelectedIds(vis)
+                      if (showVoicePanel && !isTtsPending) { await tryPlayPreloaded(vis[0]) }
+                      if (showTranslation && !isTranslating) { await handleTranslation(vis) }
+                    } catch { }
                   }
                 }}
                 className="w-16 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white text-center"
@@ -1747,16 +1803,9 @@ export default function Reader() {
           <div className={`${readerTheme === 'yellow' ? 'bg-amber-50' : readerTheme === 'green' ? 'bg-green-50' : readerTheme === 'grayWhite' ? 'bg-gray-700' : readerTheme === 'lightGrayWhite' ? 'bg-gray-600' : readerTheme === 'blackWhite' ? 'bg-black' : 'bg-white'} rounded-lg shadow-md p-8 mb-6 w-full relative`}>
             <div className="w-full">
                 {isParagraphsLoading && paragraphs.length === 0 ? (
-                  <div className="text-center text-gray-600 py-12">
-                    <div>读取中... {Math.round(Math.max(0, Math.min(100, loadingProgress)))}%</div>
-                    <div className="w-64 h-2 bg-slate-200 rounded mx-auto mt-3">
-                      <div className="h-2 bg-blue-500 rounded" style={{ width: `${Math.max(5, Math.min(100, loadingProgress))}%` }} />
-                    </div>
-                  </div>
+                  <div className="py-12" />
                 ) : paragraphs.length === 0 ? (
-                  <div className="text-center text-gray-600 py-12">
-                    正在准备内容，请稍候...
-                  </div>
+                  <div className="py-12" />
                 ) : (
                   <div className="space-y-2">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
@@ -1818,7 +1867,7 @@ export default function Reader() {
                             <span style={{ writingMode: 'vertical-rl' }} className="hidden group-hover:block text-xs font-bold">上 一 段</span>
                           </button>
                         )}
-                        { (currentParagraphIndex < paragraphs.length - 1 || mergedEnd < paragraphs.length - 1) && (
+                        { (currentParagraphIndex < paragraphs.length - 1 || mergedEnd < paragraphs.length - 1 || hasNextChapter()) && (
                           <button onClick={handleNextParagraph} aria-label="下一段" className="group absolute right-0 top-0 bottom-0 w-6 bg-transparent text-slate-400 hover:bg-slate-100 hover:rounded-md flex items-center justify-center">
                             <span className="block group-hover:hidden text-sm font-bold rotate-90">⌃</span>
                             <span style={{ writingMode: 'vertical-rl' }} className="hidden group-hover:block text-xs font-bold">下 一 段</span>
@@ -1863,9 +1912,7 @@ export default function Reader() {
                       </div>
                     )}
                     {(paragraphs.length > 0) && (isParagraphsLoading || loadingProgress < 100) && (
-                      <div className="mt-3 text-xs text-slate-600 text-center">
-                        正在加载更多内容... {Math.round(Math.max(0, Math.min(100, loadingProgress)))}%
-                      </div>
+                      <div className="mt-3 text-xs text-slate-600 text-center" />
                     )}
                   </div>
                 )}
