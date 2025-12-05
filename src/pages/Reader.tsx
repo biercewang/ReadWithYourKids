@@ -2059,7 +2059,7 @@ export default function Reader() {
                             return (
                               <div>
                                 {segments.map((s, i) => (
-                                  <div key={i} style={{ WebkitLineClamp: 2 as any, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', display: '-webkit-box' }}>{s}</div>
+                                  <div key={i} style={{ ['WebkitLineClamp']: 2, ['WebkitBoxOrient']: 'vertical', overflow: 'hidden', display: '-webkit-box' }}>{s}</div>
                                 ))}
                               </div>
                             )
@@ -2075,7 +2075,7 @@ export default function Reader() {
                           <label className="block text-slate-700 text-xs mb-1">音色</label>
                           <select
                             value={VOICE_OPTIONS.includes(ttsVoiceType) ? ttsVoiceType : '__custom__'}
-                            onChange={(e) => { const v = e.target.value; if (v === '__custom__') { setShowVoiceCustom(true) } else { setShowVoiceCustom(false); setTtsVoiceType(v); try { localStorage.setItem('volc_tts_voice_type', v) } catch { } } }}
+                            onChange={(e) => { const v = e.target.value; if (v === '__custom__') { setShowVoiceCustom(true) } else { setShowVoiceCustom(false); setTtsVoiceType(v); try { localStorage.setItem('volc_tts_voice_type', v) } catch { void 0 } } }}
                             className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white"
                           >
                             {VOICES.map(opt => (
@@ -2084,26 +2084,26 @@ export default function Reader() {
                             <option value="__custom__">自定义...</option>
                           </select>
                           {showVoiceCustom && (
-                            <input value={ttsVoiceType} onChange={(e) => { setTtsVoiceType(e.target.value); try { localStorage.setItem('volc_tts_voice_type', e.target.value) } catch { } }} className="mt-2 w-full px-3 py-2 border border-slate-300 rounded-md text-sm" placeholder="自定义音色ID" />
+                            <input value={ttsVoiceType} onChange={(e) => { setTtsVoiceType(e.target.value); try { localStorage.setItem('volc_tts_voice_type', e.target.value) } catch { void 0 } }} className="mt-2 w-full px-3 py-2 border border-slate-300 rounded-md text-sm" placeholder="自定义音色ID" />
                           )}
                         </div>
                         <div>
                           <label className="block text-slate-700 text-xs mb-1">语言</label>
-                          <input value={ttsLanguage} onChange={(e) => { setTtsLanguage(e.target.value); try { localStorage.setItem('volc_tts_language', e.target.value) } catch { } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" placeholder="cn 或 en（留空自动）" />
+                          <input value={ttsLanguage} onChange={(e) => { setTtsLanguage(e.target.value); try { localStorage.setItem('volc_tts_language', e.target.value) } catch { void 0 } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" placeholder="cn 或 en（留空自动）" />
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-3 mt-3">
                         <div>
                           <label className="block text-slate-700 text-xs mb-1">语速</label>
-                          <input type="number" step="0.1" min="0.2" max="3" value={ttsSpeed} onChange={(e) => { const v = parseFloat(e.target.value); setTtsSpeed(v); try { localStorage.setItem('volc_tts_speed_ratio', String(v)) } catch { } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" />
+                          <input type="number" step="0.1" min="0.2" max="3" value={ttsSpeed} onChange={(e) => { const v = parseFloat(e.target.value); setTtsSpeed(v); try { localStorage.setItem('volc_tts_speed_ratio', String(v)) } catch { void 0 } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" />
                         </div>
                         <div>
                           <label className="block text-slate-700 text-xs mb-1">音量</label>
-                          <input type="number" step="0.1" min="0.1" max="3" value={ttsVolume} onChange={(e) => { const v = parseFloat(e.target.value); setTtsVolume(v); try { localStorage.setItem('volc_tts_volume_ratio', String(v)) } catch { } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" />
+                          <input type="number" step="0.1" min="0.1" max="3" value={ttsVolume} onChange={(e) => { const v = parseFloat(e.target.value); setTtsVolume(v); try { localStorage.setItem('volc_tts_volume_ratio', String(v)) } catch { void 0 } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" />
                         </div>
                         <div>
                           <label className="block text-slate-700 text-xs mb-1">音高</label>
-                          <input type="number" step="0.1" min="0.1" max="3" value={ttsPitch} onChange={(e) => { const v = parseFloat(e.target.value); setTtsPitch(v); try { localStorage.setItem('volc_tts_pitch_ratio', String(v)) } catch { } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" />
+                          <input type="number" step="0.1" min="0.1" max="3" value={ttsPitch} onChange={(e) => { const v = parseFloat(e.target.value); setTtsPitch(v); try { localStorage.setItem('volc_tts_pitch_ratio', String(v)) } catch { void 0 } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" />
                         </div>
                       </div>
                     </div>
@@ -2136,19 +2136,19 @@ export default function Reader() {
                     <span className="text-sm font-medium text-slate-800">文字设置</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <button onClick={() => { setReaderFontSize(16); try { localStorage.setItem('reader_font_size', '16') } catch { } }} className="px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">小</button>
-                    <button onClick={() => { setReaderFontSize(18); try { localStorage.setItem('reader_font_size', '18') } catch { } }} className="px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">中</button>
-                    <button onClick={() => { setReaderFontSize(22); try { localStorage.setItem('reader_font_size', '22') } catch { } }} className="px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">大</button>
+                    <button onClick={() => { setReaderFontSize(16); try { localStorage.setItem('reader_font_size', '16') } catch { void 0 } }} className="px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">小</button>
+                    <button onClick={() => { setReaderFontSize(18); try { localStorage.setItem('reader_font_size', '18') } catch { void 0 } }} className="px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">中</button>
+                    <button onClick={() => { setReaderFontSize(22); try { localStorage.setItem('reader_font_size', '22') } catch { void 0 } }} className="px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 hover:bg-slate-200">大</button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-slate-700 text-xs mb-1">文字大小（{readerFontSize}px）</label>
-                    <input type="range" min={12} max={28} step={1} value={readerFontSize} onChange={(e) => { const v = parseInt(e.target.value, 10); setReaderFontSize(v); try { localStorage.setItem('reader_font_size', String(v)) } catch { } }} className="w-full" />
+                    <input type="range" min={12} max={28} step={1} value={readerFontSize} onChange={(e) => { const v = parseInt(e.target.value, 10); setReaderFontSize(v); try { localStorage.setItem('reader_font_size', String(v)) } catch { void 0 } }} className="w-full" />
                   </div>
                   <div>
                     <label className="block text-slate-700 text-xs mb-1">字体</label>
-                    <select value={readerFontFamily} onChange={(e) => { const v = e.target.value; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white">
+                    <select value={readerFontFamily} onChange={(e) => { const v = e.target.value; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white">
                       <option value="system-ui">系统默认</option>
                       <option value="serif">Serif</option>
                       <option value="sans-serif">Sans-serif</option>
@@ -2169,12 +2169,12 @@ export default function Reader() {
                   <div>
                     <label className="block text-slate-700 text-xs mb-1">背景色</label>
                     <div className="grid grid-cols-3 gap-2">
-                      <button onClick={() => { setReaderTheme('whiteBlack'); try { localStorage.setItem('reader_theme', 'whiteBlack') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'whiteBlack' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-white text-black`}>Aa</button>
-                      <button onClick={() => { setReaderTheme('yellow'); try { localStorage.setItem('reader_theme', 'yellow') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'yellow' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-amber-50 text-slate-900`}>Aa</button>
-                      <button onClick={() => { setReaderTheme('green'); try { localStorage.setItem('reader_theme', 'green') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'green' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-green-50 text-slate-900`}>Aa</button>
-                      <button onClick={() => { setReaderTheme('lightGrayWhite'); try { localStorage.setItem('reader_theme', 'lightGrayWhite') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'lightGrayWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-gray-600 text-white`}>Aa</button>
-                      <button onClick={() => { setReaderTheme('grayWhite'); try { localStorage.setItem('reader_theme', 'grayWhite') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'grayWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-gray-700 text-white`}>Aa</button>
-                      <button onClick={() => { setReaderTheme('blackWhite'); try { localStorage.setItem('reader_theme', 'blackWhite') } catch { } }} className={`h-10 rounded-md border ${readerTheme === 'blackWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-black text-white`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('whiteBlack'); try { localStorage.setItem('reader_theme', 'whiteBlack') } catch { void 0 } }} className={`h-10 rounded-md border ${readerTheme === 'whiteBlack' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-white text-black`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('yellow'); try { localStorage.setItem('reader_theme', 'yellow') } catch { void 0 } }} className={`h-10 rounded-md border ${readerTheme === 'yellow' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-amber-50 text-slate-900`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('green'); try { localStorage.setItem('reader_theme', 'green') } catch { void 0 } }} className={`h-10 rounded-md border ${readerTheme === 'green' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-green-50 text-slate-900`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('lightGrayWhite'); try { localStorage.setItem('reader_theme', 'lightGrayWhite') } catch { void 0 } }} className={`h-10 rounded-md border ${readerTheme === 'lightGrayWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-gray-600 text-white`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('grayWhite'); try { localStorage.setItem('reader_theme', 'grayWhite') } catch { void 0 } }} className={`h-10 rounded-md border ${readerTheme === 'grayWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-gray-700 text-white`}>Aa</button>
+                      <button onClick={() => { setReaderTheme('blackWhite'); try { localStorage.setItem('reader_theme', 'blackWhite') } catch { void 0 } }} className={`h-10 rounded-md border ${readerTheme === 'blackWhite' ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300'} bg-black text-white`}>Aa</button>
                     </div>
                   </div>
                   <div className="border border-slate-200 rounded-md p-3 bg-slate-50">
@@ -2203,7 +2203,7 @@ export default function Reader() {
                         <label className="block text-slate-700 text-xs mb-1">提供商</label>
                         <select
                           value={translationProvider}
-                          onChange={(e) => { const v = e.target.value; setTranslationProvider(v); try { localStorage.setItem('translation_provider', v) } catch { }; setNeedsRetranslate(true) }}
+                          onChange={(e) => { const v = e.target.value; setTranslationProvider(v); try { localStorage.setItem('translation_provider', v) } catch { void 0 }; setNeedsRetranslate(true) }}
                           className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm bg-white"
                         >
                           <option value="gemini">Google Gemini</option>
@@ -2215,7 +2215,7 @@ export default function Reader() {
                           <label className="block text-slate-700 text-xs mb-1">模型</label>
                           <select
                             value={translationOpenRouterModel}
-                            onChange={(e) => { const v = e.target.value; setTranslationOpenRouterModel(v); try { localStorage.setItem('translation_openrouter_model', v) } catch { }; setNeedsRetranslate(true) }}
+                            onChange={(e) => { const v = e.target.value; setTranslationOpenRouterModel(v); try { localStorage.setItem('translation_openrouter_model', v) } catch { void 0 }; setNeedsRetranslate(true) }}
                             className="w-full px-3 py-2 border border-blue-300 rounded-md text-sm bg-white"
                           >
                             <option value="x-ai/grok-4.1-fast:free">x-ai/grok-4.1-fast:free</option>
@@ -2227,7 +2227,6 @@ export default function Reader() {
                 )}
                 {(() => {
                   const ids = getOrderedSelectedIds()
-                  const preview = getCombinedText(ids)
                   return (
                     <div className="mb-2">
                       <div className="text-xs text-slate-600 mb-1">待翻译文本</div>
@@ -2241,7 +2240,7 @@ export default function Reader() {
                           return (
                             <div>
                               {segments.map((s, i) => (
-                                <div key={i} style={{ WebkitLineClamp: 2 as any, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', display: '-webkit-box' }}>{s}</div>
+                                <div key={i} style={{ ['WebkitLineClamp']: 2, ['WebkitBoxOrient']: 'vertical', overflow: 'hidden', display: '-webkit-box' }}>{s}</div>
                               ))}
                             </div>
                           )
@@ -2269,7 +2268,7 @@ export default function Reader() {
                   if (tText && tText.length > 0) {
                     return (
                       <div className="mt-3 border border-blue-200 rounded-md p-3 bg-blue-50 text-xs text-blue-900 whitespace-pre-wrap break-words">
-                        <div style={{ WebkitLineClamp: 2 as any, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', display: '-webkit-box' }}>{tText}</div>
+                        <div style={{ ['WebkitLineClamp']: 2, ['WebkitBoxOrient']: 'vertical', overflow: 'hidden', display: '-webkit-box' }}>{tText}</div>
                       </div>
                     )
                   }
@@ -2304,7 +2303,7 @@ export default function Reader() {
                       value={imagePromptTemplate}
                       onChange={(e) => {
                         setImagePromptTemplate(e.target.value)
-                        try { localStorage.setItem('image_prompt_template', e.target.value) } catch { }
+                        try { localStorage.setItem('image_prompt_template', e.target.value) } catch { void 0 }
                       }}
                       className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       rows={4}
@@ -2316,7 +2315,7 @@ export default function Reader() {
                         value={imageModel}
                         onChange={(e) => {
                           setImageModel(e.target.value)
-                          try { localStorage.setItem('openrouter_image_model', e.target.value) } catch { }
+                          try { localStorage.setItem('openrouter_image_model', e.target.value) } catch { void 0 }
                         }}
                         className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white"
                       >
