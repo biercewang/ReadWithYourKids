@@ -377,12 +377,16 @@ export default function Home() {
                   <div className="flex flex-col items-center justify-center" style={{ height: '100%' }}>
                     <div className="w-full" style={{ aspectRatio: '2 / 3' }}>
                       <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-[#E5D9CF] bg-white/60">
-                        <Plus className="h-10 w-10 text-amber-600" />
+                        {isUploading ? (
+                          <Upload className="h-10 w-10 text-amber-600 animate-pulse" />
+                        ) : (
+                          <Plus className="h-10 w-10 text-amber-600" />
+                        )}
                       </div>
                     </div>
                     <div className="w-full px-4 py-3">
                       <div className="h-1.5 w-full bg-[#F0E6DE] rounded-full" />
-                      <div className="mt-2 text-sm font-medium text-[#2D3748] truncate">导入新书</div>
+                      <div className="mt-2 text-sm font-medium text-[#2D3748] truncate">{isUploading ? '正在导入...' : '导入新书'}</div>
                     </div>
                   </div>
                 </label>
