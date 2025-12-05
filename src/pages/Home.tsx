@@ -438,7 +438,7 @@ export default function Home() {
                       <div className="mt-2 text-sm font-medium text-[#2D3748] truncate">{book.title}</div>
                       <div className="text-xs text-[#4A5568] truncate">{book.author || '未知作者'}</div>
                       {s && (
-                        <div className="mt-1 text-[11px] text-[#4A5568] truncate">{(ct ? `《${ct}》` : '上次章节') + ' · 第 ' + Math.max(1, curr) + ' 段'}</div>
+                        <div className="mt-1 text-[11px] text-[#4A5568] line-clamp-2">{(ct ? `《${ct}》` : '上次章节') + ' · 第 ' + Math.max(1, curr) + ' 段'}</div>
                       )}
                     </div>
                   </div>
