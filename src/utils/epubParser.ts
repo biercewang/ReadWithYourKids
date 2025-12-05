@@ -60,10 +60,15 @@ export class EPUBParser {
       const title = (opf.querySelector('metadata > title, metadata > dc\\:title')?.textContent || file.name.replace('.epub', '')).trim()
       const author = (opf.querySelector('metadata > creator, metadata > dc\\:creator')?.textContent || 'Unknown Author').trim()
       const manifest: Record<string,string> = {}
+      const manifestInfo: Record<string, { href: string, mediaType: string }> = {}
       opf.querySelectorAll('manifest > item').forEach((it) => {
         const id = it.getAttribute('id') || ''
         const href = it.getAttribute('href') || ''
-        manifest[id] = href
+        const mediaType = it.getAttribute('media-type') || ''
+        if (id) {
+          manifest[id] = href
+          manifestInfo[id] = { href, mediaType }
+        }
       })
       const spineIds: string[] = []
       opf.querySelectorAll('spine > itemref').forEach((ir) => {
@@ -73,6 +78,50 @@ export class EPUBParser {
       })
       const basePath = fullPath.replace(/[^/]+$/, '')
       const chapters: ParsedChapter[] = []
+      let coverDataUrl: string | undefined = undefined
+
+      try {
+        let coverId: string | null = null
+        const metaCover = opf.querySelector('metadata > meta[name="cover"], metadata > meta[property="cover"]')
+        if (metaCover) {
+          coverId = metaCover.getAttribute('content')
+        }
+        if (!coverId) {
+          const itemWithProp = opf.querySelector('manifest > item[properties*="cover-image"], manifest > item[properties="cover-image"]') as Element | null
+          if (itemWithProp) {
+            coverId = itemWithProp.getAttribute('id')
+          }
+        }
+        if (!coverId) {
+          const candidates = Array.from(opf.querySelectorAll('manifest > item')).filter(it => {
+            const id = it.getAttribute('id') || ''
+            const mt = it.getAttribute('media-type') || ''
+            return /cover/i.test(id) && /^image\//.test(mt)
+          })
+          if (candidates.length > 0) coverId = candidates[0].getAttribute('id')
+        }
+        if (coverId) {
+          const info = manifestInfo[coverId]
+          const href = info?.href || ''
+          const mt = info?.mediaType || ''
+          if (href) {
+            const abs = EPUBParser.normPath(basePath, href)
+            const b64 = await zip.file(abs)?.async('base64')
+            if (b64) {
+              let mime = mt
+              if (!mime || !/^image\//.test(mime)) {
+                const lower = href.toLowerCase()
+                if (lower.endsWith('.png')) mime = 'image/png'
+                else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) mime = 'image/jpeg'
+                else if (lower.endsWith('.gif')) mime = 'image/gif'
+                else if (lower.endsWith('.webp')) mime = 'image/webp'
+                else mime = 'image/jpeg'
+              }
+              coverDataUrl = `data:${mime};base64,${b64}`
+            }
+          }
+        }
+      } catch {}
 
       const tocEntries = await EPUBParser.getTocEntriesFromOpf(zip, opf, basePath)
       if (tocEntries.length > 0) {
@@ -132,7 +181,7 @@ export class EPUBParser {
           })
         }
       }
-      return { title, author, cover: undefined, chapters }
+      return { title, author, cover: coverDataUrl, chapters }
     } catch (error) {
       console.error('EPUB parsing error:', error)
       throw new Error('Failed to parse EPUB file')

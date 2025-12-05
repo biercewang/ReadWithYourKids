@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/auth'
 import { useBooksStore } from '../store/books'
 import { useNavigate } from 'react-router-dom'
-import { Book, Upload, Plus, BookOpen, Trash2, Play, KeyRound } from 'lucide-react'
+import { Book, Upload, Plus, BookOpen, Trash2, Play, KeyRound, MoreHorizontal } from 'lucide-react'
 import { parseMarkdownFile } from '../utils/mdParser'
 import { EPUBParser } from '../utils/epubParser'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
@@ -25,6 +25,9 @@ export default function Home() {
   const [changeOk, setChangeOk] = useState('')
   const [readingStatesCloud, setReadingStatesCloud] = useState<Record<string, { chapterId: string; paragraphIndex: number; mergedStart?: number; mergedEnd?: number; updatedAt?: string }>>({})
   const [chapterTitlesCloud, setChapterTitlesCloud] = useState<Record<string, string>>({})
+  const [chapterParaCountsCloud, setChapterParaCountsCloud] = useState<Record<string, number>>({})
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
+  const [cardMenuOpenId, setCardMenuOpenId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!authLoading) {
@@ -76,6 +79,22 @@ export default function Home() {
       } catch {}
     })()
   }, [isSupabaseConfigured, user, books])
+
+  useEffect(() => {
+    (async () => {
+      if (!isSupabaseConfigured || !user) return
+      const ids = Array.from(new Set(Object.values(readingStatesCloud).map(s => s.chapterId).filter(Boolean)))
+      if (ids.length === 0) return
+      try {
+        const counts: Record<string, number> = {}
+        for (const cid of ids) {
+          const { count } = await supabase.from('paragraphs').select('id', { count: 'exact', head: true }).eq('chapter_id', cid)
+          counts[cid] = typeof count === 'number' ? count : 0
+        }
+        setChapterParaCountsCloud(counts)
+      } catch {}
+    })()
+  }, [isSupabaseConfigured, user, readingStatesCloud])
 
   const handleFileUpload = async (file: File) => {
     if (!user) return
@@ -245,10 +264,10 @@ export default function Home() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#FAF7F5] flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">加载中...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto"></div>
+          <p className="mt-4 text-[#4A5568]">加载中...</p>
         </div>
       </div>
     )
@@ -257,34 +276,34 @@ export default function Home() {
   // 未启用 Supabase 或未登录时也可使用本地模式
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-[#FAF7F5]">
+      <header className="bg-transparent">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
-              <Book className="h-8 w-8 text-blue-600" />
-              <h1 className="ml-3 text-2xl font-bold text-gray-900">亲子阅读助手</h1>
+              <Book className="h-9 w-9 text-amber-600" />
+              <h1 className="ml-3 text-3xl font-semibold tracking-tight text-[#2D3748]">亲子阅读助手</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              
-              <span className="text-gray-700">欢迎，{user?.name}</span>
+            <div className="relative">
               <button
-                onClick={() => { setChangePwdOpen(true); setChangeError(''); setChangeOk(''); setCurrPwd(''); setNewPwd(''); setConfirmPwd('') }}
-                className="text-gray-500 hover:text-gray-700 inline-flex items-center"
+                onClick={() => setAvatarMenuOpen(v => !v)}
+                className="w-10 h-10 rounded-full bg-white shadow-md flex items-center justify-center text-[#2D3748]"
+                style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
               >
-                <KeyRound className="h-4 w-4 mr-1" />
-                修改密码
+                <span className="text-sm font-medium">{(user?.name || 'U').slice(0, 1).toUpperCase()}</span>
               </button>
-              <button
-                onClick={() => {
-                  useAuthStore.getState().signOut()
-                  navigate('/login')
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                退出登录
-              </button>
+              {avatarMenuOpen && (
+                <div className="absolute right-0 mt-2 w-44 rounded-xl bg-white shadow-lg ring-1 ring-black/5 py-2" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                  <button
+                    onClick={() => { setAvatarMenuOpen(false); setChangePwdOpen(true); setChangeError(''); setChangeOk(''); setCurrPwd(''); setNewPwd(''); setConfirmPwd('') }}
+                    className="w-full text-left px-3 py-2 text-sm text-[#2D3748] hover:bg-amber-50"
+                  >修改密码</button>
+                  <button
+                    onClick={() => { setAvatarMenuOpen(false); useAuthStore.getState().signOut(); navigate('/login') }}
+                    className="w-full text-left px-3 py-2 text-sm text-[#2D3748] hover:bg-amber-50"
+                  >退出登录</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -293,111 +312,112 @@ export default function Home() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">我的图书</h2>
-          <p className="text-gray-600">上传EPUB格式的电子书，开始亲子阅读之旅</p>
+          <h2 className="text-3xl font-semibold text-[#2D3748] mb-2">我的图书</h2>
+          <p className="text-[#4A5568]">导入喜欢的书，在温馨的书房开始亲子阅读</p>
         </div>
 
         
 
-        {/* Books Grid */}
         {booksLoading ? (
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">加载图书中...</p>
-          </div>
-        ) : books.length === 0 ? (
-          <div className="text-center py-12">
-            <BookOpen className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">还没有图书</h3>
-            <p className="text-gray-600">上传您的第一本EPUB电子书开始阅读</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+            <p className="text-[#4A5568]">加载图书中...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {books.map((book) => (
-              <div key={book.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
-                <div className="p-4 flex flex-col h-full">
-                  <h3 className="font-semibold text-gray-900 mb-2 text-base">{book.title}</h3>
-                  <p className="text-sm text-gray-600">{book.author || '未知作者'}</p>
-                  <div className="flex items-center space-x-2 mt-auto">
-                    <button
-                      onClick={() => handleStartReading(book)}
-                      aria-label="开始阅读"
-                      title="开始阅读"
-                      className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow-md"
-                    >
-                      <Play className="h-4 w-4" />
-                    </button>
-                    <div className="relative group">
-                      <button
-                        onClick={() => handleContinueReading(book)}
-                        aria-label="继续阅读"
-                        title="继续阅读"
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 shadow-sm hover:shadow-md"
-                      >
-                        <BookOpen className="h-4 w-4" />
-                      </button>
-                      {(() => {
-                        const s = readingStatesCloud[book.id]
-                        if (!s) return null
-                        const ct = chapterTitlesCloud[s.chapterId] || ''
-                        return (
-                          <div className="absolute z-10 hidden group-hover:block left-1/2 -translate-x-1/2 top-full mt-2 rounded-md bg-gray-900 text-white text-xs px-3 py-2 shadow-xl min-w-[220px] max-w-[340px] whitespace-pre-wrap break-words">
-                            {(ct ? `《${ct}》` : '上次章节') + '\n' + `第 ${Math.max(1, (s.paragraphIndex || 0) + 1)} 段`}
-                          </div>
-                        )
-                      })()}
-                    </div>
-                    <button onClick={() => handleDelete(book)} className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
+          <>
+            {books.length === 0 && (
+              <div className="text-center py-12">
+                <svg className="mx-auto mb-4" width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="10" y="20" width="100" height="80" rx="16" fill="#FFF" stroke="#E5D9CF" strokeWidth="2" />
+                  <circle cx="60" cy="60" r="20" fill="#F4D2A6" />
+                  <circle cx="52" cy="56" r="3" fill="#2D3748" />
+                  <circle cx="68" cy="56" r="3" fill="#2D3748" />
+                  <path d="M48 68 C52 72, 68 72, 72 68" stroke="#2D3748" strokeWidth="3" strokeLinecap="round" />
+                  <rect x="36" y="76" width="48" height="6" rx="3" fill="#EFD9C9" />
+                </svg>
+                <h3 className="text-lg font-medium text-[#2D3748] mb-2">还没有图书</h3>
+                <p className="text-[#4A5568]">导入新书，开启一次温馨的亲子阅读</p>
               </div>
-            ))}
-          </div>
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="group relative rounded-xl bg-white overflow-hidden" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                <label htmlFor="file-upload" className="cursor-pointer block w-full h-full">
+                  <div className="flex flex-col items-center justify-center" style={{ height: '100%' }}>
+                    <div className="w-full" style={{ aspectRatio: '2 / 3' }}>
+                      <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-[#E5D9CF] bg-white/60">
+                        <Plus className="h-10 w-10 text-amber-600" />
+                      </div>
+                    </div>
+                    <div className="w-full px-4 py-3">
+                      <div className="h-1.5 w-full bg-[#F0E6DE] rounded-full" />
+                      <div className="mt-2 text-sm font-medium text-[#2D3748] truncate">导入新书</div>
+                    </div>
+                  </div>
+                </label>
+              </div>
+              {books.map((book) => {
+                const s = readingStatesCloud[book.id]
+                const ct = s ? chapterTitlesCloud[s.chapterId] || '' : ''
+                const total = s ? (chapterParaCountsCloud[s.chapterId] || 0) : 0
+                const curr = s ? (s.paragraphIndex || 0) + 1 : 0
+                const pct = total > 0 ? Math.max(0, Math.min(100, Math.round((curr / total) * 100))) : 0
+                const coverSrc = book.cover_url && book.cover_url.length > 0 ? book.cover_url : (() => {
+                  const t = (book.title || '').trim()
+                  const bg = '#F3EAE3'
+                  const fg = '#2D3748'
+                  const ch = (t || '书').slice(0, 1)
+                  const svg = `<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"400\" height=\"600\"><rect width=\"100%\" height=\"100%\" fill=\"${bg}\"/><text x=\"50%\" y=\"55%\" dominant-baseline=\"middle\" text-anchor=\"middle\" font-size=\"180\" font-family=\"Georgia, serif\" fill=\"${fg}\" opacity=\"0.85\">${ch}</text></svg>`
+                  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+                })()
+                return (
+                  <div key={book.id} className="group relative rounded-xl bg-white overflow-hidden transition-all" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+                    <div className="w-full" style={{ aspectRatio: '2 / 3' }}>
+                      <img src={coverSrc} alt={book.title} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => handleStartReading(book)}
+                        className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                        aria-label="开始阅读"
+                        title="开始阅读"
+                      >
+                        <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-500 text-white shadow-lg">
+                          <Play className="h-6 w-6" />
+                        </span>
+                      </button>
+                      <div className="absolute right-3 top-3">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setCardMenuOpenId(id => (id === book.id ? null : book.id)) }}
+                          className="w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm text-[#2D3748] inline-flex items-center justify-center"
+                          aria-label="更多操作"
+                          title="更多操作"
+                        >
+                          <MoreHorizontal className="h-5 w-5" />
+                        </button>
+                        {cardMenuOpenId === book.id && (
+                          <div className="absolute right-0 mt-2 w-36 rounded-xl bg-white shadow-lg ring-1 ring-black/5 py-2" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+                            <button onClick={() => { setCardMenuOpenId(null); handleContinueReading(book) }} className="w-full text-left px-3 py-2 text-sm text-[#2D3748] hover:bg-amber-50">继续阅读</button>
+                            <button onClick={() => { setCardMenuOpenId(null); handleDelete(book) }} className="w-full text-left px-3 py-2 text-sm text-[#2D3748] hover:bg-amber-50">删除</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="px-4 py-3">
+                      <div className="h-1.5 w-full bg-[#F0E6DE] rounded-full overflow-hidden">
+                        <div style={{ width: `${pct}%` }} className="h-full bg-amber-500 rounded-full" />
+                      </div>
+                      <div className="mt-2 text-sm font-medium text-[#2D3748] truncate">{book.title}</div>
+                      <div className="text-xs text-[#4A5568] truncate">{book.author || '未知作者'}</div>
+                      {s && (
+                        <div className="mt-1 text-[11px] text-[#4A5568] truncate">{(ct ? `《${ct}》` : '上次章节') + ' · 第 ' + Math.max(1, curr) + ' 段'}</div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
         )}
 
-        {/* Upload Area (moved below books) */}
-        <div className="mt-8">
-          <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-300'
-            }`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">上传EPUB电子书</h3>
-            <p className="text-gray-600 mb-4">拖拽文件到此处，或点击选择文件</p>
-            <input
-              type="file"
-              accept=".md,.epub"
-              onChange={handleFileInput}
-              className="hidden"
-              id="file-upload"
-              disabled={isUploading}
-            />
-            <label
-              htmlFor="file-upload"
-              className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer ${
-                isUploading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {isUploading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  上传中...
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4 mr-2" />
-                  选择文件
-                </>
-              )}
-            </label>
-          </div>
-        </div>
+        <input type="file" accept=".md,.epub" onChange={handleFileInput} className="hidden" id="file-upload" disabled={isUploading} />
       </main>
       {confirmDeleteOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
