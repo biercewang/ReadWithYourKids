@@ -154,6 +154,13 @@ export default function Reader() {
   const [currentPage, setCurrentPage] = useState<number>(1)
   const visibleLimit = Math.min(paragraphs.length, pageSize * currentPage)
 
+  const [readerVersion, setReaderVersion] = useState<string>(() => {
+    try { return localStorage.getItem('reader_version') || 'v1' } catch { return 'v1' }
+  })
+  const [expandedTranslations, setExpandedTranslations] = useState<Set<string>>(new Set())
+  const [imageDrawerOpen, setImageDrawerOpen] = useState<boolean>(false)
+  const [imageDrawerPid, setImageDrawerPid] = useState<string>('')
+
   const preloadNextParagraphContent = async () => {
     try {
       if (!currentBook || !currentChapter || paragraphs.length === 0) return
@@ -1590,8 +1597,165 @@ export default function Reader() {
     }
   }, [handlePreviousParagraph, handleNextParagraph, mergedStart, mergedEnd, paragraphs])
 
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(routerLocation.search)
+      const ver = sp.get('ver') || sp.get('v') || ''
+      if (ver === 'v2' || ver === '2') {
+        setReaderVersion('v2')
+        localStorage.setItem('reader_version', 'v2')
+      } else if (ver === 'v1' || ver === '1') {
+        setReaderVersion('v1')
+        localStorage.setItem('reader_version', 'v1')
+      }
+    } catch {}
+  }, [routerLocation.search])
+
+  useEffect(() => {
+    const onVerKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      const tag = (t && t.tagName) || ''
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.getAttribute('contenteditable') === 'true')) return
+      if (e.key === 'F2') {
+        e.preventDefault()
+        const next = readerVersion === 'v1' ? 'v2' : 'v1'
+        setReaderVersion(next)
+        try { localStorage.setItem('reader_version', next) } catch {}
+      }
+    }
+    window.addEventListener('keydown', onVerKey)
+    return () => { window.removeEventListener('keydown', onVerKey) }
+  }, [readerVersion])
 
 
+
+  if (readerVersion === 'v2') {
+    return (
+      <div className={`min-h-screen`} style={{ backgroundColor: '#FAF7F5' }}>
+        <header className="bg-transparent">
+          <div className="max-w-3xl mx-auto px-6">
+            <div className="flex justify-between items-center py-4">
+              <div className="flex items-center">
+                <button onClick={() => { try { localStorage.setItem('home_refresh', '1') } catch {} ; navigate('/') }} className="p-2 text-[#374151] hover:scale-105 active:scale-95">
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <h1 className="ml-3 text-xl font-semibold" style={{ color: '#374151' }}>{currentBook.title}</h1>
+              </div>
+              <div className="relative">
+                <button onClick={() => setShowSettingsPanel(v => !v)} className="w-9 h-9 rounded-full bg-white/80 backdrop-blur-lg shadow-sm inline-flex items-center justify-center text-[#374151] hover:scale-105 active:scale-95">
+                  <Type className="h-5 w-5" />
+                </button>
+                {showSettingsPanel && (
+                  <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white/90 backdrop-blur-lg shadow-lg ring-1 ring-black/5 p-3" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}>
+                    <div className="space-y-3">
+                      <div>
+                        <div className="text-sm" style={{ color: '#374151' }}>字号</div>
+                        <input type="range" min={14} max={24} value={readerFontSize} onChange={(e)=>setReaderFontSize(parseInt(e.target.value,10))} className="w-full" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm" style={{ color: '#374151' }}>字体</div>
+                        <div className="space-x-2">
+                          <button onClick={()=>setReaderFontFamily('serif')} className={`px-3 py-1 rounded-full ${readerFontFamily==='serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Serif</button>
+                          <button onClick={()=>setReaderFontFamily('sans-serif')} className={`px-3 py-1 rounded-full ${readerFontFamily==='sans-serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Sans</button>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm" style={{ color: '#374151' }}>主题</div>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <button onClick={()=>setReaderTheme('white')} className="w-7 h-7 rounded-full bg-white border border-gray-300 hover:scale-105 active:scale-95" />
+                          <button onClick={()=>setReaderTheme('yellow')} className="w-7 h-7 rounded-full bg-amber-100 hover:scale-105 active:scale-95" />
+                          <button onClick={()=>setReaderTheme('green')} className="w-7 h-7 rounded-full bg-green-100 hover:scale-105 active:scale-95" />
+                          <button onClick={()=>setReaderTheme('blackWhite')} className="w-7 h-7 rounded-full bg-black hover:scale-105 active:scale-95" />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm" style={{ color: '#374151' }}>双语模式</div>
+                        <label className="inline-flex items-center cursor-pointer">
+                          <input type="checkbox" checked={showTranslation} onChange={(e)=>setShowTranslation(e.target.checked)} />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </header>
+        <main className="max-w-3xl mx-auto px-6 pb-32 pt-6">
+          {paragraphs.length === 0 ? (
+            <div className="py-12" />
+          ) : (
+            <div className="space-y-8">
+              {paragraphs.slice(mergedStart, Math.min(mergedEnd + 1, visibleLimit)).filter(pp => !hiddenMergedIds.includes(getParagraphId(pp))).map((p)=>{
+                const pid = getParagraphId(p)
+                const tStore = (translations || []).find(t => t.paragraph_id === pid)?.translated_text || ''
+                const tText = mergedTranslationsMap[pid] || tStore
+                const imgUrl = (mergedImagesMap[pid] || [])[0]?.image_url || ''
+                const showT = showTranslation || expandedTranslations.has(pid)
+                return (
+                  <div key={pid} className="group relative">
+                    <div className="absolute -right-2 -top-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center space-x-1 bg-white/80 backdrop-blur-lg shadow-sm rounded-full px-2 py-1">
+                        <button
+                          onClick={async ()=>{ const has = expandedTranslations.has(pid); const next = new Set(expandedTranslations); if (has) { next.delete(pid) } else { next.add(pid); if (!tText || tText.length === 0) { setSelectedIds([pid]); await handleTranslation([pid]) } } setExpandedTranslations(next) }}
+                          className="w-7 h-7 inline-flex items-center justify-center text-[#374151] hover:scale-105 active:scale-95"
+                          title="翻译"
+                        >
+                          <Languages className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={()=>{ setSelectedIds([pid]); setImageDrawerPid(pid); setImagePromptText(''); setImageDrawerOpen(true) }}
+                          className="w-7 h-7 inline-flex items-center justify-center text-[#374151] hover:scale-105 active:scale-95"
+                          title="插图"
+                        >
+                          <Brush className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="whitespace-pre-wrap break-words" style={{ fontSize: readerFontSize, lineHeight: 1.8, color: '#374151', fontFamily: readerFontFamily }}>
+                      {p.content}
+                    </div>
+                    {showT && tText && (
+                      <div className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: Math.round(readerFontSize*0.95), lineHeight: 1.6, color: '#71717A', fontFamily: 'sans-serif' }}>
+                        {tText}
+                      </div>
+                    )}
+                    {imgUrl && (
+                      <div className="mt-3 rounded-xl shadow-md overflow-hidden">
+                        <img src={imgUrl} className="w-full object-contain" />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              <div ref={listBottomRef} />
+            </div>
+          )}
+        </main>
+        {imageDrawerOpen && (
+          <div className="fixed top-0 right-0 h-full w-[320px] z-50">
+            <div className="h-full bg-white/80 backdrop-blur-lg shadow-lg ring-1 ring-black/5 p-4 flex flex-col" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-medium" style={{ color: '#374151' }}>插图提示词</div>
+                <button onClick={()=>setImageDrawerOpen(false)} className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-white/70 text-[#374151] hover:scale-105 active:scale-95"><ChevronRight className="h-4 w-4" /></button>
+              </div>
+              <textarea value={imagePromptText} onChange={(e)=>setImagePromptText(e.target.value)} className="flex-1 rounded-lg border border-gray-300 p-2 bg-white/90" placeholder="描述插图要点" />
+              <button onClick={async ()=>{ setSelectedIds([imageDrawerPid]); await handleImageGeneration(); setImageDrawerOpen(false) }} className="mt-3 w-full h-10 rounded-full bg-amber-500 text-white hover:scale-105 active:scale-95">生成插图</button>
+            </div>
+          </div>
+        )}
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div className="px-4 py-2 rounded-full bg-white/80 backdrop-blur-lg shadow-lg ring-1 ring-black/5 flex items-center space-x-3" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}>
+            <button onClick={async ()=>{ if (currentAudio) { stopPlaying() } else { await tryPlayPreloaded(getCurrentParagraphId()); const a = currentAudio; if (a) { try { a.onended = async () => { setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }} className={`w-10 h-10 rounded-full inline-flex items-center justify-center ${isPlaying?'bg-amber-100 text-amber-700':'bg-white text-[#374151]'} hover:scale-105 active:scale-95`}>
+              {isPlaying ? (<Square className="h-5 w-5" />) : (<Play className="h-5 w-5" />)}
+            </button>
+            <div className="w-40 h-1.5 bg-gray-200 rounded-full" />
+            <button onClick={()=>setShowTtsConfig(v=>!v)} className="w-9 h-9 rounded-full inline-flex items-center justify-center bg-white text-[#374151] hover:scale-105 active:scale-95"><Settings className="h-5 w-5" /></button>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
