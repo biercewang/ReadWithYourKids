@@ -163,6 +163,9 @@ export default function Reader() {
   const [spotlightMode, setSpotlightMode] = useState<boolean>(false)
   const [spotlightSentenceMap, setSpotlightSentenceMap] = useState<Record<string, number>>({})
   const [spotlightCompleted, setSpotlightCompleted] = useState<Set<string>>(new Set())
+  const [spotlightTokenIndex, setSpotlightTokenIndex] = useState<number>(-1)
+  const spotlightTimerRef = useRef<number | null>(null)
+  const [spotlightWpm, setSpotlightWpm] = useState<number>(() => { try { const v = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('spotlight_wpm') || '' : ''), 10); const d = !isNaN(v) && v > 0 ? v : 120; return Math.max(40, Math.min(300, d)) } catch { return 120 } })
 
   const formatChapterTitle = (t: string) => {
     const s = (t || '').trim()
@@ -192,11 +195,13 @@ export default function Reader() {
     if (!spotlightMode || curr < 0) {
       setSpotlightMode(true)
       setSpotlightSentenceMap(prev => ({ ...prev, [pid]: 0 }))
+      setSpotlightTokenIndex(-1)
       return
     }
     const next = curr + 1
     if (next < sentences.length) {
       setSpotlightSentenceMap(prev => ({ ...prev, [pid]: next }))
+      setSpotlightTokenIndex(-1)
       return
     }
     const nextSet = new Set(spotlightCompleted)
@@ -214,8 +219,42 @@ export default function Reader() {
       setMergedEnd(ni)
       const npid = getParagraphId(paragraphs[ni])
       setSpotlightSentenceMap(prev => ({ ...prev, [npid]: 0 }))
+      setSpotlightTokenIndex(-1)
     }
   }
+
+  useEffect(() => {
+    if (!spotlightMode) {
+      setSpotlightTokenIndex(-1)
+      if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null }
+      return
+    }
+    const pid = getCurrentParagraphId()
+    const curr = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
+    if (curr < 0) {
+      setSpotlightTokenIndex(-1)
+      if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null }
+      return
+    }
+    const sents = splitSentences(paragraphs[currentParagraphIndex]?.content || '')
+    const sentence = sents[curr] || ''
+    const tokens = Array.from(sentence.matchAll(/\S+/g))
+    const wordTokens = tokens.filter(t => /[A-Za-z0-9\u4e00-\u9fff]/.test(t[0]))
+    if (wordTokens.length === 0) {
+      setSpotlightTokenIndex(-1)
+      if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null }
+      return
+    }
+    if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current) }
+    const step = (idx: number) => {
+      if (idx >= wordTokens.length) { setSpotlightTokenIndex(wordTokens.length - 1); spotlightTimerRef.current = null; return }
+      setSpotlightTokenIndex(idx)
+      const ms = Math.max(150, Math.round(60000 / Math.max(40, Math.min(300, spotlightWpm))))
+      spotlightTimerRef.current = window.setTimeout(() => step(idx + 1), ms)
+    }
+    step(0)
+    return () => { if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } }
+  }, [spotlightMode, currentParagraphIndex, spotlightSentenceMap, spotlightWpm])
 
   const preloadNextParagraphContent = async () => {
     try {
@@ -1876,6 +1915,30 @@ export default function Reader() {
                           }}
                         />
                       </div>
+                      <div>
+                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>逐词速度</div>
+                        <input
+                          type="range"
+                          min={40}
+                          max={300}
+                          value={spotlightWpm}
+                          onChange={(e)=>{ const v = Math.max(40, Math.min(300, parseInt(e.target.value,10))); setSpotlightWpm(v); try { localStorage.setItem('spotlight_wpm', String(v)) } catch { void 0 } }}
+                          className={`w-full v2-range ${readerTheme}`}
+                          style={{
+                            appearance: 'none',
+                            WebkitAppearance: 'none',
+                            outline: 'none',
+                            border: 'none',
+                            backgroundColor: 'transparent',
+                            height: 6,
+                            borderRadius: 9999,
+                            backgroundImage: `linear-gradient(${readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151'}, ${readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151'}), linear-gradient(${readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB'}, ${readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB'})`,
+                            backgroundRepeat: 'no-repeat',
+                            backgroundSize: `${Math.round(((spotlightWpm - 40) / (300 - 40)) * 100)}% 100%, 100% 100%`
+                          }}
+                        />
+                        <div className="mt-1 text-xs" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>{spotlightWpm} 词/分钟</div>
+                      </div>
                       <div className="flex items-center justify-between">
                         <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>字体</div>
                         <div className="space-x-2">
@@ -1942,11 +2005,31 @@ export default function Reader() {
                           const isCompleted = spotlightCompleted.has(pid)
                           const isCurrent = pid === getCurrentParagraphId()
                           const dim = readerTheme === 'blackWhite' ? 'rgba(255,255,255,0.35)' : 'rgba(55,65,81,0.35)'
+                          const highlightBg = readerTheme === 'yellow' ? 'rgba(245,158,11,0.25)' : readerTheme === 'green' ? 'rgba(34,197,94,0.25)' : readerTheme === 'blackWhite' ? 'rgba(255,255,255,0.25)' : 'rgba(55,65,81,0.12)'
                           if (isCompleted) return p.content
                           const currIdx = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
                           if (!isCurrent && currIdx < 0) return <span style={{ color: dim }}>{p.content}</span>
                           const sents = splitSentences(p.content || '')
-                          return sents.map((s, i) => <span key={i} style={{ color: i === currIdx ? v2TextColor : dim }}>{s}</span>)
+                          return sents.map((s, i) => {
+                            if (i !== currIdx) return <span key={i} style={{ color: dim }}>{s}</span>
+                            const tokens = Array.from(s.matchAll(/\S+/g))
+                            if (tokens.length === 0) return <span key={i}>{s}</span>
+                            const nodes: any[] = []
+                            let last = 0
+                            let wordIdx = 0
+                            tokens.forEach((m, idx2) => {
+                              const start = m.index || 0
+                              const end = start + m[0].length
+                              if (start > last) nodes.push(<span key={`${i}-pre-${idx2}`}>{s.slice(last, start)}</span>)
+                              const isWord = /[A-Za-z0-9\u4e00-\u9fff]/.test(m[0])
+                              const isCurrTok = isWord && (wordIdx === spotlightTokenIndex)
+                              nodes.push(<span key={`${i}-tok-${idx2}`} style={{ backgroundColor: isCurrTok ? highlightBg : 'transparent' }}>{m[0]}</span>)
+                              if (isWord) wordIdx += 1
+                              last = end
+                            })
+                            if (last < s.length) nodes.push(<span key={`${i}-tail`}>{s.slice(last)}</span>)
+                            return <span key={i}>{nodes}</span>
+                          })
                         })()
                       ) : p.content}
                     </div>
