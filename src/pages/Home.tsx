@@ -343,10 +343,7 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h2 className="text-3xl font-semibold text-[#2D3748] mb-2">如心的书房</h2>
-          <p className="text-[#4A5568]">导入喜欢的书，在温馨的书房开始亲子阅读</p>
-        </div>
+        
 
         
 
@@ -376,7 +373,7 @@ export default function Home() {
                 <label htmlFor="file-upload" className="cursor-pointer block w-full h-full">
                   <div className="flex flex-col items-center justify-center" style={{ height: '100%' }}>
                     <div className="w-full" style={{ aspectRatio: '2 / 3' }}>
-                      <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-[#E5D9CF] bg-white/60">
+                      <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-[#E5D9CF] bg-white/30">
                         {isUploading ? (
                           <Upload className="h-10 w-10 text-amber-600 animate-pulse" />
                         ) : (
@@ -422,7 +419,7 @@ export default function Home() {
                       <div className="absolute right-3 top-3">
                         <button
                           onClick={(e) => { e.stopPropagation(); setCardMenuOpenId(id => (id === book.id ? null : book.id)) }}
-                          className="book-card-menu-trigger w-9 h-9 rounded-full bg-white/90 backdrop-blur-sm text-[#2D3748] inline-flex items-center justify-center"
+                          className="book-card-menu-trigger w-9 h-9 rounded-full bg-white/30 backdrop-blur-sm text-[#2D3748] inline-flex items-center justify-center"
                           aria-label="更多操作"
                           title="更多操作"
                         >
