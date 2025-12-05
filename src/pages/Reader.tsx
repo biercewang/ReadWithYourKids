@@ -155,7 +155,7 @@ export default function Reader() {
   const visibleLimit = Math.min(paragraphs.length, pageSize * currentPage)
 
   const [readerVersion, setReaderVersion] = useState<string>(() => {
-    try { return localStorage.getItem('reader_version') || 'v1' } catch { return 'v1' }
+    try { return localStorage.getItem('reader_version') || 'v2' } catch { return 'v2' }
   })
   const [expandedTranslations, setExpandedTranslations] = useState<Set<string>>(new Set())
   const [imageDrawerOpen, setImageDrawerOpen] = useState<boolean>(false)
