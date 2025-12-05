@@ -336,6 +336,7 @@ export default function Reader() {
   })()
   const [appliedSavedIndex, setAppliedSavedIndex] = useState(false)
   const [appliedSavedMerge, setAppliedSavedMerge] = useState(false)
+  const [pendingChapterId, setPendingChapterId] = useState<string | null>(null)
   const VOICES = [
     { label: '美式英语 慵懒女声-Ava', value: 'BV511_streaming' },
     { label: '美式英语 议论女声-Alicia', value: 'BV505_streaming' },
@@ -715,6 +716,7 @@ export default function Reader() {
     setSelectedIds([])
     setAppliedSavedIndex(false)
     setAppliedSavedMerge(false)
+    setPendingChapterId(null)
     setMergedImagesMap({})
     setMergedTranslationsMap({})
     setMergedNotesMap({})
@@ -732,6 +734,7 @@ export default function Reader() {
             if (typeof saved.paragraphIndex === 'number') setCurrentParagraphIndex(Math.max(0, saved.paragraphIndex))
             if (typeof saved.mergedStart === 'number') setMergedStart(Math.max(0, saved.mergedStart))
             if (typeof saved.mergedEnd === 'number') setMergedEnd(Math.max(0, saved.mergedEnd))
+            if (saved.chapterId) setPendingChapterId(saved.chapterId)
           }
         }
       } catch {}
@@ -752,12 +755,14 @@ export default function Reader() {
           return
         }
         let saved = await loadReadingStateRemote()
-        const ch = saved?.chapterId ? (chapters.find(c => c.id === saved.chapterId) || chapters[0]) : chapters[0]
+        const targetId = pendingChapterId || saved?.chapterId || null
+        const ch = targetId ? (chapters.find(c => c.id === targetId) || chapters[0]) : chapters[0]
         setCurrentChapter(ch)
         const idx = Math.max(0, saved?.paragraphIndex ?? 0)
         setCurrentParagraphIndex(idx)
         setIsParagraphsLoading(true)
         fetchParagraphs(ch.id).finally(() => setIsParagraphsLoading(false))
+        setPendingChapterId(null)
       })()
     }
   }, [chapters, currentChapter, routerLocation.search])
