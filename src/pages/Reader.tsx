@@ -1630,11 +1630,43 @@ export default function Reader() {
     return () => { window.removeEventListener('keydown', onVerKey) }
   }, [readerVersion])
 
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null
+      const inside = !!t && (!!t.closest('.v2-settings-menu') || !!t.closest('.v2-settings-trigger'))
+      if (!inside) setShowSettingsPanel(false)
+    }
+    document.addEventListener('click', onDocClick)
+    return () => { document.removeEventListener('click', onDocClick) }
+  }, [])
+
 
 
   if (readerVersion === 'v2') {
+    const v2BgColor = readerTheme === 'yellow' ? '#FFFBEB' : readerTheme === 'green' ? '#DCFCE7' : readerTheme === 'blackWhite' ? '#000000' : '#FFFFFF'
+    const v2TextColor = readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151'
     return (
-      <div className={`min-h-screen`} style={{ backgroundColor: '#FAF7F5' }}>
+      <div className={`min-h-screen`} style={{ backgroundColor: v2BgColor }}>
+        <style>{`
+          .v2-range { appearance: none; -webkit-appearance: none; outline: none; border: none; background-color: transparent; width: 100%; height: 6px; border-radius: 9999px; }
+          .v2-range::-webkit-slider-runnable-track { height: 6px; border-radius: 9999px; background: transparent; }
+          .v2-range::-moz-range-track { height: 6px; border-radius: 9999px; background: #E5E7EB; }
+          .v2-range.blackWhite::-moz-range-track { background: #4B5563; }
+          .v2-range.white::-moz-range-progress { background: #374151; }
+          .v2-range.yellow::-moz-range-progress { background: #F59E0B; }
+          .v2-range.green::-moz-range-progress { background: #22C55E; }
+          .v2-range.blackWhite::-moz-range-progress { background: #FFFFFF; }
+          .v2-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 9999px; border: none; margin-top: -4px; }
+          .v2-range.white::-webkit-slider-thumb { background: #374151; }
+          .v2-range.yellow::-webkit-slider-thumb { background: #F59E0B; }
+          .v2-range.green::-webkit-slider-thumb { background: #22C55E; }
+          .v2-range.blackWhite::-webkit-slider-thumb { background: #FFFFFF; }
+          .v2-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 9999px; border: none; }
+          .v2-range.white::-moz-range-thumb { background: #374151; }
+          .v2-range.yellow::-moz-range-thumb { background: #F59E0B; }
+          .v2-range.green::-moz-range-thumb { background: #22C55E; }
+          .v2-range.blackWhite::-moz-range-thumb { background: #FFFFFF; }
+        `}</style>
         <header className="bg-transparent">
           <div className="max-w-3xl mx-auto px-6">
             <div className="flex justify-between items-center py-4">
@@ -1642,37 +1674,60 @@ export default function Reader() {
                 <button onClick={() => { try { localStorage.setItem('home_refresh', '1') } catch {} ; navigate('/') }} className="p-2 text-[#374151] hover:scale-105 active:scale-95">
                   <ArrowLeft className="h-5 w-5" />
                 </button>
-                <h1 className="ml-3 text-xl font-semibold" style={{ color: '#374151' }}>{currentBook.title}</h1>
+                <h1 className="ml-3 text-xl font-semibold" style={{ color: v2TextColor }}>{currentBook.title}</h1>
               </div>
               <div className="relative">
-                <button onClick={() => setShowSettingsPanel(v => !v)} className="w-9 h-9 rounded-full bg-white/80 backdrop-blur-lg shadow-sm inline-flex items-center justify-center text-[#374151] hover:scale-105 active:scale-95">
+                <button
+                  onClick={() => setShowSettingsPanel(v => !v)}
+                  className="v2-settings-trigger w-9 h-9 rounded-full backdrop-blur-lg shadow-sm inline-flex items-center justify-center hover:scale-105 active:scale-95"
+                  style={{ backgroundColor: readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.8)' : 'rgba(255,255,255,0.8)', color: readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' }}
+                >
                   <Type className="h-5 w-5" />
                 </button>
                 {showSettingsPanel && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white shadow-lg ring-1 ring-black/5 p-3 z-50" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}>
+                  <div className="v2-settings-menu absolute right-0 mt-2 w-64 rounded-xl shadow-lg ring-1 ring-black/5 p-3 z-50" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)', backgroundColor: readerTheme === 'blackWhite' ? '#1F2937' : '#FFFFFF', color: readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' }}>
                     <div className="space-y-3">
                       <div>
-                        <div className="text-sm" style={{ color: '#374151' }}>字号</div>
-                        <input type="range" min={14} max={24} value={readerFontSize} onChange={(e)=>setReaderFontSize(parseInt(e.target.value,10))} className="w-full" />
+                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>字号</div>
+                        <input
+                          type="range"
+                          min={14}
+                          max={24}
+                          value={readerFontSize}
+                          onChange={(e)=>setReaderFontSize(parseInt(e.target.value,10))}
+                          className={`w-full v2-range ${readerTheme}`}
+                          style={{
+                            appearance: 'none',
+                            WebkitAppearance: 'none',
+                            outline: 'none',
+                            border: 'none',
+                            backgroundColor: 'transparent',
+                            height: 6,
+                            borderRadius: 9999,
+                            backgroundImage: `linear-gradient(${readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151'}, ${readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151'}), linear-gradient(${readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB'}, ${readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB'})`,
+                            backgroundRepeat: 'no-repeat',
+                            backgroundSize: `${Math.round(((readerFontSize - 14) / (24 - 14)) * 100)}% 100%, 100% 100%`
+                          }}
+                        />
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="text-sm" style={{ color: '#374151' }}>字体</div>
+                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>字体</div>
                         <div className="space-x-2">
                           <button onClick={()=>setReaderFontFamily('serif')} className={`px-3 py-1 rounded-full ${readerFontFamily==='serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Serif</button>
                           <button onClick={()=>setReaderFontFamily('sans-serif')} className={`px-3 py-1 rounded-full ${readerFontFamily==='sans-serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Sans</button>
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm" style={{ color: '#374151' }}>主题</div>
+                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>主题</div>
                         <div className="flex items-center space-x-2 mt-1">
-                          <button onClick={()=>setReaderTheme('white')} className="w-7 h-7 rounded-full bg-white border border-gray-300 hover:scale-105 active:scale-95" />
-                          <button onClick={()=>setReaderTheme('yellow')} className="w-7 h-7 rounded-full bg-amber-100 hover:scale-105 active:scale-95" />
-                          <button onClick={()=>setReaderTheme('green')} className="w-7 h-7 rounded-full bg-green-100 hover:scale-105 active:scale-95" />
-                          <button onClick={()=>setReaderTheme('blackWhite')} className="w-7 h-7 rounded-full bg-black hover:scale-105 active:scale-95" />
+                          <button onClick={()=>{ setReaderTheme('white'); try { localStorage.setItem('reader_theme', 'white') } catch { void 0 } }} className="w-7 h-7 rounded-full bg-white border border-gray-300 hover:scale-105 active:scale-95" />
+                          <button onClick={()=>{ setReaderTheme('yellow'); try { localStorage.setItem('reader_theme', 'yellow') } catch { void 0 } }} className="w-7 h-7 rounded-full bg-amber-100 hover:scale-105 active:scale-95" />
+                          <button onClick={()=>{ setReaderTheme('green'); try { localStorage.setItem('reader_theme', 'green') } catch { void 0 } }} className="w-7 h-7 rounded-full bg-green-100 hover:scale-105 active:scale-95" />
+                          <button onClick={()=>{ setReaderTheme('blackWhite'); try { localStorage.setItem('reader_theme', 'blackWhite') } catch { void 0 } }} className="w-7 h-7 rounded-full bg-black hover:scale-105 active:scale-95" />
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="text-sm" style={{ color: '#374151' }}>双语模式</div>
+                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>双语模式</div>
                         <label className="inline-flex items-center cursor-pointer">
                           <input type="checkbox" checked={showTranslation} onChange={(e)=>setShowTranslation(e.target.checked)} />
                         </label>
@@ -1715,7 +1770,7 @@ export default function Reader() {
                         </button>
                       </div>
                     </div>
-                    <div className="whitespace-pre-wrap break-words" style={{ fontSize: readerFontSize, lineHeight: 1.8, color: '#374151', fontFamily: readerFontFamily }}>
+                    <div className="whitespace-pre-wrap break-words" style={{ fontSize: readerFontSize, lineHeight: 1.8, color: v2TextColor, fontFamily: readerFontFamily }}>
                       {p.content}
                     </div>
                     {showT && tText && (
@@ -1748,12 +1803,32 @@ export default function Reader() {
           </div>
         )}
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-          <div className="px-4 py-2 rounded-full bg-white/80 backdrop-blur-lg shadow-lg ring-1 ring-black/5 flex items-center space-x-3" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}>
+          <div
+            className="px-4 py-2 rounded-full backdrop-blur-lg shadow-lg ring-1 ring-black/5 flex items-center space-x-3"
+            style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)', backgroundColor: readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.8)' : 'rgba(255,255,255,0.8)' }}
+          >
             <button onClick={async ()=>{ if (currentAudio) { stopPlaying() } else { await tryPlayPreloaded(getCurrentParagraphId()); const a = currentAudio; if (a) { try { a.onended = async () => { setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }} className={`w-10 h-10 rounded-full inline-flex items-center justify-center ${isPlaying?'bg-amber-100 text-amber-700':'bg-white text-[#374151]'} hover:scale-105 active:scale-95`}>
               {isPlaying ? (<Square className="h-5 w-5" />) : (<Play className="h-5 w-5" />)}
             </button>
-            <div className="w-40 h-1.5 bg-gray-200 rounded-full" />
-            <button onClick={()=>setShowTtsConfig(v=>!v)} className="w-9 h-9 rounded-full inline-flex items-center justify-center bg-white text-[#374151] hover:scale-105 active:scale-95"><Settings className="h-5 w-5" /></button>
+            <div
+              className="w-40 h-1.5 rounded-full overflow-hidden"
+              style={{ backgroundColor: (readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB') }}
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${paragraphs.length > 0 ? Math.round(((currentParagraphIndex + 1) / paragraphs.length) * 100) : 0}%`,
+                  backgroundColor: (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151')
+                }}
+              />
+            </div>
+            <button
+              onClick={()=>setShowTtsConfig(v=>!v)}
+              className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95"
+              style={{ backgroundColor: readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.9)' : '#FFFFFF', color: readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' }}
+            >
+              <Settings className="h-5 w-5" />
+            </button>
           </div>
         </div>
       </div>
