@@ -1646,7 +1646,7 @@ export default function Reader() {
                   <Type className="h-5 w-5" />
                 </button>
                 {showSettingsPanel && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white/90 backdrop-blur-lg shadow-lg ring-1 ring-black/5 p-3" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}>
+                  <div className="absolute right-0 mt-2 w-64 rounded-xl bg-white shadow-lg ring-1 ring-black/5 p-3 z-50" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}>
                     <div className="space-y-3">
                       <div>
                         <div className="text-sm" style={{ color: '#374151' }}>字号</div>
@@ -1695,7 +1695,7 @@ export default function Reader() {
                 return (
                   <div key={pid} className="group relative">
                     <div className="absolute -right-2 -top-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="flex items-center space-x-1 bg-white/80 backdrop-blur-lg shadow-sm rounded-full px-2 py-1">
+                      <div className="flex items-center space-x-1 bg-white/20 backdrop-blur-sm rounded-full px-1.5 py-0.5">
                         <button
                           onClick={async ()=>{ const has = expandedTranslations.has(pid); const next = new Set(expandedTranslations); if (has) { next.delete(pid) } else { next.add(pid); if (!tText || tText.length === 0) { setSelectedIds([pid]); await handleTranslation([pid]) } } setExpandedTranslations(next) }}
                           className="w-7 h-7 inline-flex items-center justify-center text-[#374151] hover:scale-105 active:scale-95"
