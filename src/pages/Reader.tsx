@@ -1779,7 +1779,7 @@ export default function Reader() {
                               <div className="flex-1 pr-2">
                                 <p className={`leading-relaxed ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'text-white' : (readerTheme === 'whiteBlack' ? 'text-black' : 'text-gray-800')} w-full whitespace-pre-wrap break-words`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>{p.content}</p>
                                 {tText && (
-                                  <div className={`mt-2 rounded-md p-2 whitespace-pre-wrap break-words border ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'bg-white/10 text-white border-white/20' : 'bg-slate-100 text-slate-800 border-slate-300'}`} style={{ fontSize: Math.max(10, readerFontSize - 2), fontFamily: readerFontFamily }}>{tText}</div>
+                                  <div className={`mt-4 rounded-md p-2 whitespace-pre-wrap break-words border ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'bg-white/10 text-white border-white/20' : 'bg-blue-50 text-blue-900 border-blue-200'}`} style={{ fontSize: Math.max(10, readerFontSize - 2), fontFamily: readerFontFamily }}>{tText}</div>
                                 )}
                                 {imgUrl && (
                                   <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
@@ -1915,9 +1915,7 @@ export default function Reader() {
               </button>
               <button
                 onClick={() => { const next = !showSettingsPanel; setShowSettingsPanel(next) }}
-                onMouseEnter={() => setHoverSettings(true)}
-                onMouseLeave={() => setHoverSettings(false)}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showSettingsPanel ? 'bg-blue-100 text-blue-600' : (hoverSettings ? 'bg-gray-100 text-gray-700' : 'text-gray-600')}`}
+                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showSettingsPanel ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-700'}`}
                 title="设置"
               >
                 <Type className="h-5 w-5" />
@@ -2018,7 +2016,7 @@ export default function Reader() {
                 </div>
               </div>
             )}
-            {(showSettingsPanel || hoverSettings) && (
+            {showSettingsPanel && (
               <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-2">
