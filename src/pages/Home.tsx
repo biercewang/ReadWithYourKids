@@ -26,6 +26,8 @@ export default function Home() {
   const [readingStatesCloud, setReadingStatesCloud] = useState<Record<string, { chapterId: string; paragraphIndex: number; mergedStart?: number; mergedEnd?: number; updatedAt?: string }>>({})
   const [chapterTitlesCloud, setChapterTitlesCloud] = useState<Record<string, string>>({})
   const [chapterParaCountsCloud, setChapterParaCountsCloud] = useState<Record<string, number>>({})
+  const [chapterOrdersCloud, setChapterOrdersCloud] = useState<Record<string, number>>({})
+  const [bookChapterCountsCloud, setBookChapterCountsCloud] = useState<Record<string, number>>({})
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false)
   const [cardMenuOpenId, setCardMenuOpenId] = useState<string | null>(null)
   const [uploadErrorInfo, setUploadErrorInfo] = useState<{ step: string; status?: number; message: string } | null>(null)
@@ -61,9 +63,11 @@ export default function Home() {
           .eq('user_id', user.id);
         const map: Record<string, { chapterId: string; paragraphIndex: number; mergedStart?: number; mergedEnd?: number; updatedAt?: string }> = {};
         const chIds: string[] = [];
+        const bIds: string[] = [];
         (rp || []).forEach((row: any) => {
           if (row && row.book_id) {
             map[row.book_id] = { chapterId: row.chapter_id, paragraphIndex: row.paragraph_index || 0, mergedStart: row.merged_start, mergedEnd: row.merged_end, updatedAt: row.updated_at };
+            bIds.push(row.book_id)
             if (row.chapter_id) chIds.push(row.chapter_id);
           }
         });
@@ -71,11 +75,21 @@ export default function Home() {
         if (chIds.length > 0) {
           const { data: chRows } = await supabase
             .from('chapters')
-            .select('id,title')
+            .select('id,title,order_index')
             .in('id', Array.from(new Set(chIds)));
           const ctm: Record<string, string> = {};
-          (chRows || []).forEach((c: any) => { if (c && c.id) ctm[c.id] = c.title || '' });
+          const ord: Record<string, number> = {};
+          (chRows || []).forEach((c: any) => { if (c && c.id) { ctm[c.id] = c.title || ''; ord[c.id] = typeof c.order_index === 'number' ? c.order_index : 1 } });
           setChapterTitlesCloud(ctm);
+          setChapterOrdersCloud(ord);
+        }
+        if (bIds.length > 0) {
+          const counts: Record<string, number> = {}
+          for (const bid of Array.from(new Set(bIds))) {
+            const { count } = await supabase.from('chapters').select('id', { count: 'exact', head: true }).eq('book_id', bid)
+            counts[bid] = typeof count === 'number' ? count : 0
+          }
+          setBookChapterCountsCloud(counts)
         }
       } catch {}
     })()
@@ -429,7 +443,6 @@ export default function Home() {
                       </div>
                     </div>
                     <div className="w-full px-4 py-3">
-                      <div className="h-1.5 w-full bg-[#F0E6DE] rounded-full" />
                       <div className="mt-2 text-sm font-medium text-[#2D3748] truncate">{isUploading ? '正在导入...' : '导入新书'}</div>
                     </div>
                   </div>
@@ -438,9 +451,9 @@ export default function Home() {
               {books.map((book) => {
                 const s = readingStatesCloud[book.id]
                 const ct = s ? chapterTitlesCloud[s.chapterId] || '' : ''
-                const total = s ? (chapterParaCountsCloud[s.chapterId] || 0) : 0
-                const curr = s ? (s.paragraphIndex || 0) + 1 : 0
-                const pct = total > 0 ? Math.max(0, Math.min(100, Math.round((curr / total) * 100))) : 0
+                const chTotal = bookChapterCountsCloud[book.id] || 0
+                const chOrder = s ? (chapterOrdersCloud[s.chapterId] || 1) : 1
+                const pct = chTotal > 0 ? Math.max(0, Math.min(100, Math.round(((chOrder - 1) / chTotal) * 100))) : 0
                 const coverSrc = book.cover_url && book.cover_url.length > 0 ? book.cover_url : (() => {
                   const t = (book.title || '').trim()
                   const bg = '#F3EAE3'
