@@ -160,6 +160,9 @@ export default function Reader() {
   const [expandedTranslations, setExpandedTranslations] = useState<Set<string>>(new Set())
   const [imageDrawerOpen, setImageDrawerOpen] = useState<boolean>(false)
   const [imageDrawerPid, setImageDrawerPid] = useState<string>('')
+  const [spotlightMode, setSpotlightMode] = useState<boolean>(false)
+  const [spotlightSentenceMap, setSpotlightSentenceMap] = useState<Record<string, number>>({})
+  const [spotlightCompleted, setSpotlightCompleted] = useState<Set<string>>(new Set())
 
   const formatChapterTitle = (t: string) => {
     const s = (t || '').trim()
@@ -167,6 +170,51 @@ export default function Reader() {
     if (onlyParen) return s
     const replaced = s.replace(/\(\s*[^)]*\s*\)/g, '').replace(/\s+/g, ' ').trim()
     return replaced || s
+  }
+
+  const splitSentences = (text: string): string[] => {
+    try {
+      const arr = (text || '').match(/[^。\.！？!?]+[。\.！？!?]?/g) || [text]
+      return arr.map(s => s.trim()).filter(s => s.length > 0)
+    } catch {
+      const s = (text || '').trim()
+      return s.length > 0 ? [s] : []
+    }
+  }
+
+  const advanceSpotlight = () => {
+    if (paragraphs.length === 0) return
+    const idx = currentParagraphIndex
+    const pid = getParagraphId(paragraphs[idx])
+    const text = paragraphs[idx]?.content || ''
+    const sentences = splitSentences(text)
+    const curr = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
+    if (!spotlightMode || curr < 0) {
+      setSpotlightMode(true)
+      setSpotlightSentenceMap(prev => ({ ...prev, [pid]: 0 }))
+      return
+    }
+    const next = curr + 1
+    if (next < sentences.length) {
+      setSpotlightSentenceMap(prev => ({ ...prev, [pid]: next }))
+      return
+    }
+    const nextSet = new Set(spotlightCompleted)
+    nextSet.add(pid)
+    setSpotlightCompleted(nextSet)
+    let ni = idx + 1
+    while (ni < paragraphs.length) {
+      const npid = getParagraphId(paragraphs[ni])
+      if (!nextSet.has(npid)) break
+      ni += 1
+    }
+    if (ni < paragraphs.length) {
+      setCurrentParagraphIndex(ni)
+      setMergedStart(ni)
+      setMergedEnd(ni)
+      const npid = getParagraphId(paragraphs[ni])
+      setSpotlightSentenceMap(prev => ({ ...prev, [npid]: 0 }))
+    }
   }
 
   const preloadNextParagraphContent = async () => {
@@ -1482,6 +1530,32 @@ export default function Reader() {
   }
 
   const handleNextParagraph = async () => {
+    if (spotlightMode) {
+      let nextIndex = currentParagraphIndex + 1
+      const done = new Set(spotlightCompleted)
+      while (nextIndex < paragraphs.length) {
+        const npid = getParagraphId(paragraphs[nextIndex])
+        if (!done.has(npid)) break
+        nextIndex += 1
+      }
+      if (nextIndex < paragraphs.length) {
+        setCurrentParagraphIndex(nextIndex)
+        setMergedStart(nextIndex)
+        setMergedEnd(nextIndex)
+        ensureMergedData(nextIndex, nextIndex)
+        let vis: string[] = []
+        try {
+          vis = paragraphs
+            .slice(nextIndex, Math.min(nextIndex + 1, paragraphs.length))
+            .filter(pp => !hiddenMergedIds.includes(getParagraphId(pp)))
+            .map(pp => getParagraphId(pp))
+          setSelectedIds(vis)
+        } catch { }
+        try { if (showVoicePanel && !isTtsPending) { await tryPlayPreloaded(vis[0]) } } catch { }
+        try { if (showTranslation && !isTranslating) await handleTranslation(vis) } catch { }
+        return
+      }
+    }
     if (mergedEnd > mergedStart) {
       const win = mergedEnd - mergedStart + 1
       const ne = Math.min(paragraphs.length - 1, mergedEnd + 1)
@@ -1630,6 +1704,9 @@ export default function Reader() {
       } else if (e.key === 'Enter') {
         e.preventDefault()
         handleNextParagraph()
+      } else if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault()
+        advanceSpotlight()
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         extendDown()
@@ -1860,7 +1937,18 @@ export default function Reader() {
                       </div>
                     </div>
                     <div className="whitespace-pre-wrap break-words" style={{ fontSize: readerFontSize, lineHeight: 1.8, color: v2TextColor, fontFamily: readerFontFamily }}>
-                      {p.content}
+                      {spotlightMode ? (
+                        (() => {
+                          const isCompleted = spotlightCompleted.has(pid)
+                          const isCurrent = pid === getCurrentParagraphId()
+                          const dim = readerTheme === 'blackWhite' ? 'rgba(255,255,255,0.35)' : 'rgba(55,65,81,0.35)'
+                          if (isCompleted) return p.content
+                          const currIdx = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
+                          if (!isCurrent && currIdx < 0) return <span style={{ color: dim }}>{p.content}</span>
+                          const sents = splitSentences(p.content || '')
+                          return sents.map((s, i) => <span key={i} style={{ color: i === currIdx ? v2TextColor : dim }}>{s}</span>)
+                        })()
+                      ) : p.content}
                     </div>
                     {showT && tText && (
                       <div className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: Math.round(readerFontSize*0.95), lineHeight: 1.6, color: '#71717A', fontFamily: 'sans-serif' }}>
