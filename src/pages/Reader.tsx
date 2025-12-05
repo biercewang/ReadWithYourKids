@@ -1627,6 +1627,9 @@ export default function Reader() {
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
         handleNextParagraph()
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        handleNextParagraph()
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         extendDown()
