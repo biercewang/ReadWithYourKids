@@ -1710,6 +1710,13 @@ export default function Reader() {
           .v2-range.yellow::-moz-range-thumb { background: #F59E0B; }
           .v2-range.green::-moz-range-thumb { background: #22C55E; }
           .v2-range.blackWhite::-moz-range-thumb { background: #FFFFFF; }
+
+          @keyframes v2-indeterminate {
+            0% { left: -30%; }
+            100% { left: 100%; }
+          }
+          .v2-progress-track { position: relative; overflow: hidden; }
+          .v2-indeterminate { position: absolute; top: 0; bottom: 0; width: 30%; left: -30%; animation: v2-indeterminate 2.4s linear infinite; }
         `}</style>
         <header className="bg-transparent">
           <div className="max-w-3xl mx-auto px-6">
@@ -1890,16 +1897,23 @@ export default function Reader() {
               {isPlaying ? (<Square className="h-5 w-5" />) : (<Play className="h-5 w-5" />)}
             </button>
             <div
-              className="w-40 h-1.5 rounded-full overflow-hidden"
+              className="w-40 h-1.5 rounded-full v2-progress-track"
               style={{ backgroundColor: (readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB') }}
             >
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${paragraphs.length > 0 ? Math.round(((currentParagraphIndex + 1) / paragraphs.length) * 100) : 0}%`,
-                  backgroundColor: (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151')
-                }}
-              />
+              {paragraphs.length === 0 ? (
+                <div
+                  className="v2-indeterminate rounded-full"
+                  style={{ backgroundColor: (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151') }}
+                />
+              ) : (
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${paragraphs.length > 0 ? Math.round(((currentParagraphIndex + 1) / paragraphs.length) * 100) : 0}%`,
+                    backgroundColor: (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151')
+                  }}
+                />
+              )}
             </div>
             <button
               onClick={()=>setShowTtsConfig(v=>!v)}
