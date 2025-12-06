@@ -177,7 +177,7 @@ export default function Reader() {
 
   const splitSentences = (text: string): string[] => {
     try {
-      const arr = (text || '').match(/[^。\.！？!?]+(?:[。\.！？!?](?:[”’』」》】])*)?/g) || [text]
+      const arr = (text || '').match(/[^。\.！？!?…．.]+(?:[。\.！？!?…．.]+(?:[”’』」》】])*)?/g) || [text]
       return arr.map(s => s.trim()).filter(s => s.length > 0)
     } catch {
       const s = (text || '').trim()
@@ -247,14 +247,29 @@ export default function Reader() {
     }
     if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current) }
     const step = (idx: number) => {
-      if (idx >= wordTokens.length) { setSpotlightTokenIndex(wordTokens.length - 1); spotlightTimerRef.current = null; return }
+      const baseMs = Math.max(150, Math.round(60000 / Math.max(40, Math.min(300, spotlightWpm))))
+      if (idx >= wordTokens.length) {
+        setSpotlightTokenIndex(wordTokens.length - 1)
+        spotlightTimerRef.current = window.setTimeout(() => { advanceSpotlight() }, baseMs)
+        return
+      }
       setSpotlightTokenIndex(idx)
-      const ms = Math.max(150, Math.round(60000 / Math.max(40, Math.min(300, spotlightWpm))))
-      spotlightTimerRef.current = window.setTimeout(() => step(idx + 1), ms)
+      spotlightTimerRef.current = window.setTimeout(() => step(idx + 1), baseMs)
     }
     step(0)
     return () => { if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } }
   }, [spotlightMode, currentParagraphIndex, spotlightSentenceMap, spotlightWpm])
+
+  useEffect(() => {
+    if (spotlightMode) {
+      const pid = getCurrentParagraphId()
+      if (pid) {
+        setSpotlightSentenceMap(prev => ({ ...prev, [pid]: typeof prev[pid] === 'number' && prev[pid] >= 0 ? prev[pid] : 0 }))
+        setSpotlightCompleted(prev => { const s = new Set(prev); s.delete(pid); return s })
+        setSpotlightTokenIndex(-1)
+      }
+    }
+  }, [spotlightMode, currentParagraphIndex])
 
   const preloadNextParagraphContent = async () => {
     try {
@@ -2062,7 +2077,7 @@ export default function Reader() {
                 <div className="text-sm font-medium" style={{ color: '#374151' }}>插图提示词</div>
                 <button onClick={()=>setImageDrawerOpen(false)} className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-white/70 text-[#374151] hover:scale-105 active:scale-95"><ChevronRight className="h-4 w-4" /></button>
               </div>
-              <textarea value={imagePromptText} onChange={(e)=>setImagePromptText(e.target.value)} className="flex-1 rounded-lg border border-gray-300 p-2 bg-white/90" placeholder="描述插图要点" />
+              <textarea value={imagePromptText} onChange={(e)=>setImagePromptText(e.target.value)} className={`flex-1 rounded-lg border border-gray-300 p-2 bg-white/90 focus:outline-none focus:ring-2 ${readerTheme === 'yellow' ? 'focus:ring-amber-500 focus:border-amber-500' : readerTheme === 'green' ? 'focus:ring-green-500 focus:border-green-500' : readerTheme === 'blackWhite' ? 'focus:ring-white focus:border-white' : 'focus:ring-gray-300 focus:border-gray-300'}`} placeholder="描述插图要点" />
               <button onClick={async ()=>{ setSelectedIds([imageDrawerPid]); await handleImageGeneration(); setImageDrawerOpen(false) }} className="mt-3 w-full h-10 rounded-full bg-amber-500 text-white hover:scale-105 active:scale-95">生成插图</button>
             </div>
           </div>
@@ -2072,8 +2087,8 @@ export default function Reader() {
             className="px-4 py-2 rounded-full backdrop-blur-lg shadow-lg ring-1 ring-black/5 flex items-center space-x-3"
             style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)', backgroundColor: readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.8)' : 'rgba(255,255,255,0.8)' }}
           >
-            <button onClick={async ()=>{ if (currentAudio) { stopPlaying() } else { await tryPlayPreloaded(getCurrentParagraphId()); const a = currentAudio; if (a) { try { a.onended = async () => { setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }} className={`w-10 h-10 rounded-full inline-flex items-center justify-center ${isPlaying?'bg-amber-100 text-amber-700':'bg-white text-[#374151]'} hover:scale-105 active:scale-95`}>
-              {isPlaying ? (<Square className="h-5 w-5" />) : (<Play className="h-5 w-5" />)}
+            <button onClick={()=>{ if (spotlightMode) { setSpotlightMode(false); setSpotlightTokenIndex(-1); if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } } else { const pid = getCurrentParagraphId(); if (pid) { setSpotlightMode(true); setSpotlightSentenceMap(prev => ({ ...prev, [pid]: typeof prev[pid] === 'number' && prev[pid] >= 0 ? prev[pid] : 0 })); setSpotlightCompleted(prev => { const s = new Set(prev); s.delete(pid); return s }); setSpotlightTokenIndex(-1) } } }} className="w-10 h-10 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none" style={{ backgroundColor: spotlightMode ? (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151') : (readerTheme === 'blackWhite' ? '#FFFFFF' : '#FFFFFF'), color: spotlightMode ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#374151' : '#374151') }}>
+              {spotlightMode ? (<Square className="h-5 w-5" />) : (<Play className="h-5 w-5" />)}
             </button>
             <div
               className="w-40 h-1.5 rounded-full v2-progress-track"
@@ -2095,11 +2110,22 @@ export default function Reader() {
               )}
             </div>
             <button
-              onClick={()=>setShowTtsConfig(v=>!v)}
-              className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95"
-              style={{ backgroundColor: readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.9)' : '#FFFFFF', color: readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' }}
+              onClick={async ()=>{ if (isPlaying) { stopPlaying() } else { await tryPlayPreloaded(getCurrentParagraphId()); const a = currentAudio; if (a) { try { a.onended = async () => { setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }}
+              className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
+              style={{ backgroundColor: isPlaying ? (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151') : (readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.9)' : '#FFFFFF'), color: isPlaying ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
             >
-              <Settings className="h-5 w-5" />
+              {isPlaying ? (
+                <Square className="h-5 w-5" />
+              ) : (
+                <div className="flex items-center">
+                  <Volume2 className="h-5 w-5" />
+                  <div className="ml-1 flex items-end space-x-0.5">
+                    {Array.from({ length: isPlaying ? 3 : 1 }).map((_, i) => (
+                      <span key={i} className="w-0.5 rounded-sm" style={{ height: `${6 + i * 4}px`, backgroundColor: (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151') }} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </button>
           </div>
         </div>
@@ -2165,7 +2191,7 @@ export default function Reader() {
                   }
                 }}
                 title={currentChapter?.title || ''}
-                className="px-3 py-2 rounded-md border border-slate-300 bg-white text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64 truncate"
+                className={`px-3 py-2 rounded-md border border-slate-300 bg-white text-sm text-slate-800 shadow-sm focus:outline-none focus:ring-2 w-64 truncate ${readerTheme === 'yellow' ? 'focus:ring-amber-500 focus:border-amber-500' : readerTheme === 'green' ? 'focus:ring-green-500 focus:border-green-500' : readerTheme === 'blackWhite' ? 'focus:ring-white focus:border-white' : 'focus:ring-slate-300 focus:border-slate-300'}`}
               >
                 {(useBooksStore.getState().chapters || []).map(c => (
                   <option key={c.id} value={c.id}>{c.title}</option>
@@ -2193,7 +2219,7 @@ export default function Reader() {
                     } catch { }
                   }
                 }}
-                className="w-16 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white text-center"
+                className={`w-16 px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white text-center focus:outline-none focus:ring-2 ${readerTheme === 'yellow' ? 'focus:ring-amber-500 focus:border-amber-500' : readerTheme === 'green' ? 'focus:ring-green-500 focus:border-green-500' : readerTheme === 'blackWhite' ? 'focus:ring-white focus:border-white' : 'focus:ring-gray-300 focus:border-gray-300'}`}
               >
                 {Array.from({ length: Math.max(paragraphs.length, 1) }, (_, i) => (
                   <option key={i} value={String(i + 1)}>{i + 1}</option>
@@ -2638,7 +2664,7 @@ export default function Reader() {
                   <textarea
                     value={imagePromptText}
                     onChange={(e) => { setImagePromptText(e.target.value) }}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className={`w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 ${readerTheme === 'yellow' ? 'focus:ring-amber-500 focus:border-amber-500' : readerTheme === 'green' ? 'focus:ring-green-500 focus:border-green-500' : readerTheme === 'blackWhite' ? 'focus:ring-white focus:border-white' : 'focus:ring-slate-300 focus:border-slate-300'}`}
                     rows={5}
                     placeholder="已填充选中文本，可直接编辑提示词"
                   />
@@ -2652,7 +2678,7 @@ export default function Reader() {
                         setImagePromptTemplate(e.target.value)
                         try { localStorage.setItem('image_prompt_template', e.target.value) } catch { void 0 }
                       }}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className={`w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 ${readerTheme === 'yellow' ? 'focus:ring-amber-500 focus:border-amber-500' : readerTheme === 'green' ? 'focus:ring-green-500 focus:border-green-500' : readerTheme === 'blackWhite' ? 'focus:ring-white focus:border-white' : 'focus:ring-slate-300 focus:border-slate-300'}`}
                       rows={4}
                       placeholder="使用 {paragraph} 占位符插入选中文本"
                     />
@@ -2664,7 +2690,7 @@ export default function Reader() {
                           setImageModel(e.target.value)
                           try { localStorage.setItem('openrouter_image_model', e.target.value) } catch { void 0 }
                         }}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white"
+                        className={`w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 ${readerTheme === 'yellow' ? 'focus:ring-amber-500 focus:border-amber-500' : readerTheme === 'green' ? 'focus:ring-green-500 focus:border-green-500' : readerTheme === 'blackWhite' ? 'focus:ring-white focus:border-white' : 'focus:ring-slate-300 focus:border-slate-300'}`}
                       >
                         <option value="google/gemini-2.5-flash-image">google/gemini-2.5-flash-image</option>
                         <option value="google/gemini-3-pro-image-preview">google/gemini-3-pro-image-preview</option>
@@ -2698,7 +2724,7 @@ export default function Reader() {
             {(showDiscussion || hoverDiscussion) && (
               <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 relative">
                 <div className="space-y-3">
-                  <textarea value={noteInput} onChange={(e) => setNoteInput(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" rows={3} placeholder="记录交流内容" />
+                  <textarea value={noteInput} onChange={(e) => setNoteInput(e.target.value)} className={`w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 ${readerTheme === 'yellow' ? 'focus:ring-amber-500 focus:border-amber-500' : readerTheme === 'green' ? 'focus:ring-green-500 focus:border-green-500' : readerTheme === 'blackWhite' ? 'focus:ring-white focus:border-white' : 'focus:ring-slate-300 focus:border-slate-300'}`} rows={3} placeholder="记录交流内容" />
                   <div className="flex space-x-2">
                     <button onClick={() => setRole('parent')} className={`flex-1 px-3 py-2 rounded-md text-sm ${currentRole === 'parent' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>家长</button>
                     <button onClick={() => setRole('child')} className={`flex-1 px-3 py-2 rounded-md text-sm ${currentRole === 'child' ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>孩子</button>
