@@ -2149,13 +2149,15 @@ export default function Reader() {
                   <div key={pid} className="group relative">
                     <div className="absolute -right-2 -bottom-3 opacity-0 group-hover:opacity-100 transition-opacity">
                       <div className="flex items-center space-x-1 bg-white/20 backdrop-blur-sm rounded-full px-1.5 py-0.5">
-                        <button
-                          onClick={async ()=>{ const has = expandedTranslations.has(pid); const next = new Set(expandedTranslations); if (has) { next.delete(pid) } else { next.add(pid); if (!tText || tText.length === 0) { setSelectedIds([pid]); await handleTranslation([pid]) } } setExpandedTranslations(next) }}
-                          className="w-7 h-7 inline-flex items-center justify-center text-[#374151] hover:scale-105 active:scale-95"
-                          title="翻译"
-                        >
-                          <Languages className="h-4 w-4" />
-                        </button>
+                        {(!tText || tText.length === 0) && (
+                          <button
+                            onClick={async ()=>{ const has = expandedTranslations.has(pid); const next = new Set(expandedTranslations); if (has) { next.delete(pid) } else { next.add(pid); if (!tText || tText.length === 0) { setSelectedIds([pid]); await handleTranslation([pid]) } } setExpandedTranslations(next) }}
+                            className={`w-7 h-7 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 ${ (isTranslating && (showTranslation || expandedTranslations.has(pid))) ? 'bg-white text-[#374151] animate-pulse' : 'text-[#374151]'}`}
+                            title="翻译"
+                          >
+                            <Languages className="h-4 w-4" />
+                          </button>
+                        )}
                         {readerVersion !== 'v2' && (
                           <button
                             onClick={()=>{ setSelectedIds([pid]); setImageDrawerPid(pid); setImagePromptText(''); setImageDrawerOpen(true) }}
@@ -2256,31 +2258,19 @@ export default function Reader() {
                 />
               )}
             </div>
-            {readerVersion !== 'v2' ? (
-              <button
-                onMouseEnter={()=>setHoverBottomTts(true)}
-                onMouseLeave={()=>setHoverBottomTts(false)}
-                onClick={async ()=>{ if (isTtsPending) { return } if (isPlaying) { stopAllAudio() } else { const a = await tryPlayPreloaded(getCurrentParagraphId()); if (a) { try { a.onended = async () => { try { allAudioRef.current.delete(a) } catch {} ; setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }}
-                className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
-                style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverBottomTts ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverBottomTts ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverBottomTts ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverBottomTts ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return (isPlaying || isTtsPending) ? active : inactive })(), color: (isPlaying || isTtsPending) ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
-              >
-                {isPlaying ? (
-                  <Mic className="h-5 w-5 animate-pulse" />
-                ) : (
-                  <Volume2 className="h-5 w-5" />
-                )}
-              </button>
-            ) : (
-              <button
-                onMouseEnter={()=>setHoverTranslation(true)}
-                onMouseLeave={()=>setHoverTranslation(false)}
-                onClick={async ()=>{ const next = !showTranslation; setShowTranslation(next); if (next && !isTranslating) { const r = getVisibleRange(); const ids = paragraphs.slice(r.start, Math.min(r.end+1, visibleLimit)).filter(pp => !hiddenMergedIds.includes(getParagraphId(pp))).map(pp => getParagraphId(pp)); try { await handleTranslation(ids) } catch {} } }}
-                className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
-                style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverTranslation ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverTranslation ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverTranslation ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverTranslation ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverTranslation ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverTranslation ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return showTranslation ? active : inactive })(), color: showTranslation ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
-              >
-                <Languages className="h-5 w-5" />
-              </button>
-            )}
+            <button
+              onMouseEnter={()=>setHoverBottomTts(true)}
+              onMouseLeave={()=>setHoverBottomTts(false)}
+              onClick={async ()=>{ if (isTtsPending) { return } if (isPlaying) { stopAllAudio() } else { const a = await tryPlayPreloaded(getCurrentParagraphId()); if (a) { try { a.onended = async () => { try { allAudioRef.current.delete(a) } catch {} ; setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }}
+              className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
+              style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverBottomTts ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverBottomTts ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverBottomTts ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverBottomTts ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return (isPlaying || isTtsPending) ? active : inactive })(), color: (isPlaying || isTtsPending) ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
+            >
+              {isPlaying ? (
+                <Mic className="h-5 w-5 animate-pulse" />
+              ) : (
+                <Volume2 className="h-5 w-5" />
+              )}
+            </button>
           </div>
         </div>
       </div>
