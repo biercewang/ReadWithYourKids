@@ -433,6 +433,27 @@ export default function Reader() {
   ]
   const VOICE_OPTIONS = VOICES.map(v => v.value)
 
+  const FONT_OPTIONS_V2: { label: string; value: string }[] = [
+    { label: 'System', value: 'system-ui' },
+    { label: 'Inter', value: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif" },
+    { label: 'Roboto', value: "'Roboto', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif" },
+    { label: 'Lora', value: "'Lora', Georgia, serif" },
+    { label: 'Merriweather', value: "'Merriweather', Georgia, serif" },
+    { label: 'Source Serif 4', value: "'Source Serif 4', Georgia, serif" },
+    { label: 'Serif', value: 'serif' },
+    { label: 'Sans', value: 'sans-serif' },
+  ]
+  const cycleFontNext = () => {
+    const idx = Math.max(0, FONT_OPTIONS_V2.findIndex(o => o.value === readerFontFamily))
+    const next = FONT_OPTIONS_V2[(idx + 1) % FONT_OPTIONS_V2.length]
+    setReaderFontFamily(next.value)
+    try { localStorage.setItem('reader_font_family', next.value) } catch { }
+  }
+  const currentFontLabel = (() => {
+    const found = FONT_OPTIONS_V2.find(o => o.value === readerFontFamily)
+    return found ? found.label : 'System'
+  })()
+
   useEffect(() => {
     try { localStorage.setItem('volc_tts_voice_type', ttsVoiceType) } catch { }
     setShowVoiceCustom(!VOICE_OPTIONS.includes(ttsVoiceType))
@@ -2084,15 +2105,11 @@ export default function Reader() {
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>字体</div>
-                        <div className="space-x-2">
-                          <button onClick={()=>{ setReaderFontFamily('system-ui'); try { localStorage.setItem('reader_font_family', 'system-ui') } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==='system-ui'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>System</button>
-                          <button onClick={()=>{ const v = "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Inter</button>
-                          <button onClick={()=>{ const v = "'Roboto', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Roboto', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Roboto</button>
-                          <button onClick={()=>{ const v = "'Lora', Georgia, serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Lora', Georgia, serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Lora</button>
-                          <button onClick={()=>{ const v = "'Merriweather', Georgia, serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Merriweather', Georgia, serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Merriweather</button>
-                          <button onClick={()=>{ const v = "'Source Serif 4', Georgia, serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Source Serif 4', Georgia, serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Source Serif 4</button>
-                          <button onClick={()=>{ setReaderFontFamily('serif'); try { localStorage.setItem('reader_font_family', 'serif') } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==='serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Serif</button>
-                          <button onClick={()=>{ setReaderFontFamily('sans-serif'); try { localStorage.setItem('reader_font_family', 'sans-serif') } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==='sans-serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Sans</button>
+                        <div className="flex items-center space-x-2">
+                          <div className={`px-3 py-1 rounded-full ${readerTheme === 'yellow' ? 'bg-amber-100 text-amber-700' : readerTheme === 'green' ? 'bg-green-100 text-green-700' : readerTheme === 'blackWhite' ? 'bg-white text-black' : 'bg-gray-100 text-gray-700'}`}>{currentFontLabel}</div>
+                          <button onClick={cycleFontNext} className={`w-7 h-7 rounded-full inline-flex items-center justify-center ${readerTheme === 'yellow' ? 'bg-amber-200 text-amber-800' : readerTheme === 'green' ? 'bg-green-200 text-green-800' : readerTheme === 'blackWhite' ? 'bg-white text-black' : 'bg-gray-200 text-gray-800'} hover:scale-105 active:scale-95`} title="切换字体">
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
                       <div>
