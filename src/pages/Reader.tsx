@@ -1759,6 +1759,31 @@ export default function Reader() {
   }, [paragraphs, mergedStart, mergedEnd])
 
   useEffect(() => {
+    (async () => {
+      if (!showTranslation || isTranslating || paragraphs.length === 0) return
+      const r = getVisibleRange()
+      const slice = paragraphs.slice(r.start, Math.min(r.end + 1, visibleLimit))
+      for (const p of slice) {
+        const pid = getParagraphId(p)
+        const storeText = (translations || []).find(t => t.paragraph_id === pid)?.translated_text || ''
+        const existingT = mergedTranslationsMap[pid] || storeText
+        if ((!existingT || existingT.length === 0) && !transPreloadingRef.current.has(pid)) {
+          transPreloadingRef.current.add(pid)
+          try {
+            const full = translationProvider === 'openrouter'
+              ? await translateWithOpenRouter(p.content || '', 'zh', translationOpenRouterModel)
+              : await translateWithGemini(p.content || '', 'zh')
+            if (full && full.length > 0) {
+              setMergedTranslationsMap(prev => ({ ...prev, [pid]: full }))
+              addTranslation(getBookKey(), pid, full, 'zh')
+            }
+          } catch { } finally { transPreloadingRef.current.delete(pid) }
+        }
+      }
+    })()
+  }, [showTranslation, mergedStart, mergedEnd, paragraphs, translations, translationProvider, translationOpenRouterModel])
+
+  useEffect(() => {
     if (paragraphs.length > 0 && selectedIds.length === 0 && !autoSelectedOnce) {
       try {
         const pid = getCurrentParagraphId()
@@ -2114,13 +2139,15 @@ export default function Reader() {
                         >
                           <Languages className="h-4 w-4" />
                         </button>
-                        <button
-                          onClick={()=>{ setSelectedIds([pid]); setImageDrawerPid(pid); setImagePromptText(''); setImageDrawerOpen(true) }}
-                          className="w-7 h-7 inline-flex items-center justify-center text-[#374151] hover:scale-105 active:scale-95"
-                          title="插图"
-                        >
-                          <Brush className="h-4 w-4" />
-                        </button>
+                        {readerVersion !== 'v2' && (
+                          <button
+                            onClick={()=>{ setSelectedIds([pid]); setImageDrawerPid(pid); setImagePromptText(''); setImageDrawerOpen(true) }}
+                            className="w-7 h-7 inline-flex items-center justify-center text-[#374151] hover:scale-105 active:scale-95"
+                            title="插图"
+                          >
+                            <Brush className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="whitespace-pre-wrap break-words" style={{ fontSize: readerFontSize, lineHeight: 1.8, color: v2TextColor, fontFamily: readerFontFamily }}>
@@ -2173,7 +2200,7 @@ export default function Reader() {
             </div>
           )}
         </main>
-        {imageDrawerOpen && (
+        {readerVersion !== 'v2' && imageDrawerOpen && (
           <div className="fixed top-0 right-0 h-full w-[320px] z-50">
             <div className="h-full bg-white/80 backdrop-blur-lg shadow-lg ring-1 ring-black/5 p-4 flex flex-col" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}>
               <div className="flex items-center justify-between mb-3">
@@ -2212,19 +2239,31 @@ export default function Reader() {
                 />
               )}
             </div>
-            <button
-              onMouseEnter={()=>setHoverBottomTts(true)}
-              onMouseLeave={()=>setHoverBottomTts(false)}
-              onClick={async ()=>{ if (isTtsPending) { return } if (isPlaying) { stopAllAudio() } else { const a = await tryPlayPreloaded(getCurrentParagraphId()); if (a) { try { a.onended = async () => { try { allAudioRef.current.delete(a) } catch {} ; setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }}
-              className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
-              style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverBottomTts ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverBottomTts ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverBottomTts ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverBottomTts ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return (isPlaying || isTtsPending) ? active : inactive })(), color: (isPlaying || isTtsPending) ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
-            >
-              {isPlaying ? (
-                <Mic className="h-5 w-5 animate-pulse" />
-              ) : (
-                <Volume2 className="h-5 w-5" />
-              )}
-            </button>
+            {readerVersion !== 'v2' ? (
+              <button
+                onMouseEnter={()=>setHoverBottomTts(true)}
+                onMouseLeave={()=>setHoverBottomTts(false)}
+                onClick={async ()=>{ if (isTtsPending) { return } if (isPlaying) { stopAllAudio() } else { const a = await tryPlayPreloaded(getCurrentParagraphId()); if (a) { try { a.onended = async () => { try { allAudioRef.current.delete(a) } catch {} ; setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }}
+                className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
+                style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverBottomTts ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverBottomTts ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverBottomTts ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverBottomTts ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return (isPlaying || isTtsPending) ? active : inactive })(), color: (isPlaying || isTtsPending) ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
+              >
+                {isPlaying ? (
+                  <Mic className="h-5 w-5 animate-pulse" />
+                ) : (
+                  <Volume2 className="h-5 w-5" />
+                )}
+              </button>
+            ) : (
+              <button
+                onMouseEnter={()=>setHoverTranslation(true)}
+                onMouseLeave={()=>setHoverTranslation(false)}
+                onClick={async ()=>{ const next = !showTranslation; setShowTranslation(next); if (next && !isTranslating) { const r = getVisibleRange(); const ids = paragraphs.slice(r.start, Math.min(r.end+1, visibleLimit)).filter(pp => !hiddenMergedIds.includes(getParagraphId(pp))).map(pp => getParagraphId(pp)); try { await handleTranslation(ids) } catch {} } }}
+                className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
+                style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverTranslation ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverTranslation ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverTranslation ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverTranslation ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverTranslation ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverTranslation ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return showTranslation ? active : inactive })(), color: showTranslation ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
+              >
+                <Languages className="h-5 w-5" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -2461,15 +2500,6 @@ export default function Reader() {
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-4 py-2 flex items-center justify-evenly w-full">
               <button
-                onClick={async () => { const next = !showVoicePanel; setShowVoicePanel(next); if (next) { stopAllAudio(); if (!isTtsPending) { await handleTextToSpeech() } } else { stopAllAudio() } }}
-                onMouseEnter={() => setHoverVoice(true)}
-                onMouseLeave={() => setHoverVoice(false)}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isPlaying ? 'bg-blue-100 text-blue-600 animate-pulse' : (showVoicePanel ? 'bg-blue-100 text-blue-600' : (hoverVoice ? 'bg-gray-100 text-gray-700' : 'text-gray-600'))}`}
-                title="语音"
-              >
-                <Volume2 className="h-5 w-5" />
-              </button>
-              <button
                 onClick={() => { const next = !showTranslation; setShowTranslation(next); if (next) { if (!isTranslating) { const ids = getOrderedSelectedIds(); const targetId = ids[0]; const storeText = (translations || []).find(t => t.paragraph_id === targetId)?.translated_text || ''; const tText = mergedTranslationsMap[targetId] || storeText; if (!tText || tText.length === 0 || needsRetranslate) { handleTranslation(); setNeedsRetranslate(false) } } } }}
                 onMouseEnter={() => setHoverTranslation(true)}
                 onMouseLeave={() => setHoverTranslation(false)}
@@ -2478,31 +2508,44 @@ export default function Reader() {
               >
                 <Languages className="h-5 w-5" />
               </button>
-              <button
-                onClick={() => { const next = !showImagePanel; setShowImagePanel(next) }}
-                onMouseEnter={() => setHoverImage(true)}
-                onMouseLeave={() => setHoverImage(false)}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : (showImagePanel ? 'bg-blue-100 text-blue-600' : (hoverImage ? 'bg-gray-100 text-gray-700' : 'text-gray-600'))}`}
-                title="图片"
-              >
-                <Image className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => { const next = !showDiscussion; setShowDiscussion(next) }}
-                onMouseEnter={() => setHoverDiscussion(true)}
-                onMouseLeave={() => setHoverDiscussion(false)}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showDiscussion ? 'bg-blue-100 text-blue-600' : (hoverDiscussion ? 'bg-gray-100 text-gray-700' : 'text-gray-600')}`}
-                title="讨论"
-              >
-              <MessageSquare className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => { const next = !showSettingsPanel; setShowSettingsPanel(next) }}
-                className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showSettingsPanel ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-700'}`}
-                title="设置"
-              >
-                <Type className="h-5 w-5" />
-              </button>
+              {readerVersion !== 'v2' && (
+                <>
+                  <button
+                    onClick={async () => { const next = !showVoicePanel; setShowVoicePanel(next); if (next) { stopAllAudio(); if (!isTtsPending) { await handleTextToSpeech() } } else { stopAllAudio() } }}
+                    onMouseEnter={() => setHoverVoice(true)}
+                    onMouseLeave={() => setHoverVoice(false)}
+                    className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isPlaying ? 'bg-blue-100 text-blue-600 animate-pulse' : (showVoicePanel ? 'bg-blue-100 text-blue-600' : (hoverVoice ? 'bg-gray-100 text-gray-700' : 'text-gray-600'))}`}
+                    title="语音"
+                  >
+                    <Volume2 className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => { const next = !showImagePanel; setShowImagePanel(next) }}
+                    onMouseEnter={() => setHoverImage(true)}
+                    onMouseLeave={() => setHoverImage(false)}
+                    className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : (showImagePanel ? 'bg-blue-100 text-blue-600' : (hoverImage ? 'bg-gray-100 text-gray-700' : 'text-gray-600'))}`}
+                    title="图片"
+                  >
+                    <Image className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => { const next = !showDiscussion; setShowDiscussion(next) }}
+                    onMouseEnter={() => setHoverDiscussion(true)}
+                    onMouseLeave={() => setHoverDiscussion(false)}
+                    className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showDiscussion ? 'bg-blue-100 text-blue-600' : (hoverDiscussion ? 'bg-gray-100 text-gray-700' : 'text-gray-600')}`}
+                    title="讨论"
+                  >
+                    <MessageSquare className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => { const next = !showSettingsPanel; setShowSettingsPanel(next) }}
+                    className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${showSettingsPanel ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-700'}`}
+                    title="设置"
+                  >
+                    <Type className="h-5 w-5" />
+                  </button>
+                </>
+              )}
             </div>
             {(showVoicePanel || hoverVoice) && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
@@ -2752,7 +2795,7 @@ export default function Reader() {
                 })()}
               </div>
             )}
-            {(showImagePanel || hoverImage) && (
+            {readerVersion !== 'v2' && (showImagePanel || hoverImage) && (
               <div className="bg-white rounded-lg shadow-md p-6 border border-slate-200 relative">
                 <div className="mb-2 px-4 flex items-center justify-evenly">
                   <button onClick={handleImageGeneration} className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isGeneratingImage ? 'bg-blue-100 text-blue-600 animate-pulse' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`} title="执行绘图">
