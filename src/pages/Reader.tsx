@@ -169,7 +169,7 @@ export default function Reader() {
   const resumeFirstRef = useRef<boolean>(false)
   const cursorHideTimerRef = useRef<number | null>(null)
   const [spotlightWpm, setSpotlightWpm] = useState<number>(() => { try { const v = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('spotlight_wpm') || '' : ''), 10); const d = !isNaN(v) && v > 0 ? v : 120; return Math.max(40, Math.min(300, d)) } catch { return 120 } })
-  const [spotlightSpeedFactor, setSpotlightSpeedFactor] = useState<number>(1)
+  const [spotlightSpeedFactor, setSpotlightSpeedFactor] = useState<number>(() => { try { const raw = (typeof localStorage !== 'undefined' ? localStorage.getItem('spotlight_speed_factor') || '' : ''); const v = parseFloat(raw); const d = !isNaN(v) ? v : 1; return Math.max(0.5, Math.min(2.0, d)) } catch { return 1 } })
   const [hoverBottomPlay, setHoverBottomPlay] = useState<boolean>(false)
   const [hoverBottomTts, setHoverBottomTts] = useState<boolean>(false)
   const paragraphJustSwitchedRef = useRef<boolean>(false)
@@ -2025,13 +2025,14 @@ export default function Reader() {
                         />
                       </div>
                       <div>
-                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>逐词速度</div>
+                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>基础速度</div>
                         <input
                           type="range"
-                          min={40}
-                          max={300}
-                          value={spotlightWpm}
-                          onChange={(e)=>{ const v = Math.max(40, Math.min(300, parseInt(e.target.value,10))); setSpotlightWpm(v); try { localStorage.setItem('spotlight_wpm', String(v)) } catch { void 0 } }}
+                          min={0.5}
+                          max={2.0}
+                          step={0.05}
+                          value={spotlightSpeedFactor}
+                          onChange={(e)=>{ const v = Math.max(0.5, Math.min(2.0, parseFloat(e.target.value))); setSpotlightSpeedFactor(v); try { localStorage.setItem('spotlight_speed_factor', String(v)) } catch { void 0 } }}
                           className={`w-full v2-range ${readerTheme}`}
                           style={{
                             appearance: 'none',
@@ -2043,10 +2044,10 @@ export default function Reader() {
                             borderRadius: 9999,
                             backgroundImage: `linear-gradient(${readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151'}, ${readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151'}), linear-gradient(${readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB'}, ${readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB'})`,
                             backgroundRepeat: 'no-repeat',
-                            backgroundSize: `${Math.round(((spotlightWpm - 40) / (300 - 40)) * 100)}% 100%, 100% 100%`
+                            backgroundSize: `${Math.round(((spotlightSpeedFactor - 0.5) / (2.0 - 0.5)) * 100)}% 100%, 100% 100%`
                           }}
                         />
-                        <div className="mt-1 text-xs" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>{spotlightWpm} 词/分钟</div>
+                        <div className="mt-1 text-xs" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>{spotlightSpeedFactor.toFixed(2)}×</div>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>字体</div>
