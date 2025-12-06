@@ -2235,7 +2235,11 @@ export default function Reader() {
                     {showT && tText && (
                       <div className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: Math.round(readerFontSize*0.95), lineHeight: 1.6, color: v2TextColor, fontFamily: 'sans-serif' }}>
                         {(() => {
-                          if (!spotlightMode) return tText.replace(/\[\[S\d+\]\]\s*/g, '')
+                          if (!spotlightMode) {
+                            const noMarks = tText.replace(/\[\[S\d+\]\]\s*/g, '')
+                            const singlePara = noMarks.replace(/\s*\n+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
+                            return singlePara
+                          }
                           const trs = parseMarkedTranslations(tText)
                           const currIdx = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
                           const dim = readerTheme === 'blackWhite' ? 'rgba(255,255,255,0.35)' : 'rgba(55,65,81,0.35)'
