@@ -19,7 +19,7 @@ export async function translateWithGemini(text: string, targetLang: string = 'zh
   if (!geminiKey) throw new Error('未检测到Google Gemini密钥，请在.env设置VITE_GOOGLE_API_KEY，或使用localStorage设置 gemini_api_key')
   const buildUrl = (version: 'v1beta' | 'v1beta2') => `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(geminiModel)}:generateContent?key=${encodeURIComponent(geminiKey)}`
   let url = buildUrl('v1beta')
-  const prompt = `Translate the following text to ${targetLang} (Simplified Chinese). Preserve meaning and names. Output only the translated text.\n\n${text}`
+  const prompt = `输入文本按句标注了[[S0]]、[[S1]]等标签。请逐句翻译为${targetLang}（简体中文），并保留每句开头的原标签（例如[[S0]]）。不要改变顺序、不要新增或删除标签。仅输出带标签的译文，每句以其原标签开头。\n\n${text}`
   const containsChinese = /[\u4e00-\u9fa5]/.test(text)
   const body = {
     contents: [
@@ -59,7 +59,7 @@ export async function translateWithGemini(text: string, targetLang: string = 'zh
 export async function translateWithGeminiStream(text: string, onDelta: (s: string) => void, targetLang: string = 'zh') {
   if (!geminiKey) throw new Error('未检测到Google Gemini密钥，请在.env设置VITE_GOOGLE_API_KEY，或使用localStorage设置 gemini_api_key')
   const buildUrl = (version: 'v1beta' | 'v1beta2') => `https://generativelanguage.googleapis.com/${version}/models/${encodeURIComponent(geminiModel)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(geminiKey)}`
-  const prompt = `Translate the following text to ${targetLang} (Simplified Chinese). Preserve meaning and names. Output only the translated text.\n\n${text}`
+  const prompt = `输入文本按句标注了[[S0]]、[[S1]]等标签。请逐句翻译为${targetLang}（简体中文），并保留每句开头的原标签（例如[[S0]]）。不要改变顺序、不要新增或删除标签。仅输出带标签的译文，每句以其原标签开头。\n\n${text}`
   const body = {
     contents: [
       {
@@ -111,7 +111,7 @@ export async function translateWithOpenRouter(text: string, targetLang: string =
   if (!openrouterKey) throw new Error('未检测到OpenRouter密钥，请在.env设置VITE_OPENROUTER_API_KEY，或使用localStorage设置 openrouter_api_key')
   const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
   const url = isDev ? '/openrouter/api/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
-  const prompt = `Translate the following text to ${targetLang} (Simplified Chinese). Preserve meaning and names. Output only the translated text.\n\n${text}`
+  const prompt = `输入文本按句标注了[[S0]]、[[S1]]等标签。请逐句翻译为${targetLang}（简体中文），并保留每句开头的原标签（例如[[S0]]）。不要改变顺序、不要新增或删除标签。仅输出带标签的译文，每句以其原标签开头。\n\n${text}`
   const body = {
     model: modelOverride || openrouterModel,
     messages: [
@@ -142,7 +142,7 @@ export async function translateWithOpenRouterStream(text: string, onDelta: (s: s
   if (!openrouterKey) throw new Error('未检测到OpenRouter密钥，请在.env设置VITE_OPENROUTER_API_KEY，或使用localStorage设置 openrouter_api_key')
   const isDev = typeof import.meta !== 'undefined' && (import.meta as any).env?.DEV
   const url = isDev ? '/openrouter/api/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions'
-  const prompt = `Translate the following text to ${targetLang} (Simplified Chinese). Preserve meaning and names. Output only the translated text.\n\n${text}`
+  const prompt = `输入文本按句标注了[[S0]]、[[S1]]等标签。请逐句翻译为${targetLang}（简体中文），并保留每句开头的原标签（例如[[S0]]）。不要改变顺序、不要新增或删除标签。仅输出带标签的译文，每句以其原标签开头。\n\n${text}`
   const body = {
     model: modelOverride || openrouterModel,
     messages: [
