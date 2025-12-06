@@ -264,12 +264,21 @@ export default function Reader() {
     if (spotlightMode) {
       const pid = getCurrentParagraphId()
       if (pid) {
-        setSpotlightSentenceMap(prev => ({ ...prev, [pid]: typeof prev[pid] === 'number' && prev[pid] >= 0 ? prev[pid] : 0 }))
+        setSpotlightSentenceMap(prev => ({ ...prev, [pid]: 0 }))
         setSpotlightCompleted(prev => { const s = new Set(prev); s.delete(pid); return s })
         setSpotlightTokenIndex(-1)
       }
     }
   }, [spotlightMode, currentParagraphIndex])
+
+  useEffect(() => {
+    const pid = getCurrentParagraphId()
+    if (pid) {
+      setSpotlightSentenceMap(prev => ({ ...prev, [pid]: 0 }))
+      setSpotlightCompleted(prev => { const s = new Set(prev); s.delete(pid); return s })
+      setSpotlightTokenIndex(-1)
+    }
+  }, [currentParagraphIndex])
 
   const preloadNextParagraphContent = async () => {
     try {
