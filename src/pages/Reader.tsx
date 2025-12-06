@@ -195,6 +195,27 @@ export default function Reader() {
     }
   }
 
+  const SENT_MARK_RE = /\[\[S(\d+)\]\]/g
+  const buildMarkedTextForTranslation = (raw: string): string => {
+    const sents = splitSentences(raw || '')
+    return sents.map((s, i) => `[[S${i}]] ${s}`).join('\n')
+  }
+  const parseMarkedTranslations = (text: string): { idx: number, text: string }[] => {
+    const src = text || ''
+    const parts: { idx: number, text: string }[] = []
+    const matches = Array.from(src.matchAll(/\[\[S(\d+)\]\]\s*/g))
+    if (matches.length === 0) return splitSentences(src).map((t, i) => ({ idx: i, text: t }))
+    for (let m = 0; m < matches.length; m++) {
+      const mm = matches[m]
+      const start = (mm.index || 0) + mm[0].length
+      const end = m < matches.length - 1 ? (matches[m + 1].index || src.length) : src.length
+      const idx = parseInt(mm[1], 10)
+      const seg = src.slice(start, end).trim()
+      parts.push({ idx: isNaN(idx) ? m : idx, text: seg })
+    }
+    return parts
+  }
+
   const advanceSpotlight = () => {
     if (paragraphs.length === 0) return
     const idx = currentParagraphIndex
@@ -369,9 +390,10 @@ export default function Reader() {
         if ((!existingT || existingT.length === 0) && !transPreloadingRef.current.has(nextPid)) {
           transPreloadingRef.current.add(nextPid)
           try {
+            const marked = buildMarkedTextForTranslation(nextText)
             const full = translationProvider === 'openrouter'
-              ? await translateWithOpenRouter(nextText, 'zh', translationOpenRouterModel)
-              : await translateWithGemini(nextText, 'zh')
+              ? await translateWithOpenRouter(marked, 'zh', translationOpenRouterModel)
+              : await translateWithGemini(marked, 'zh')
             if (full && full.length > 0) {
               setMergedTranslationsMap(prev => ({ ...prev, [nextPid]: full }))
               addTranslation(bid, nextPid, full, 'zh')
@@ -1036,7 +1058,8 @@ export default function Reader() {
           setMergedTranslationsMap(prev => ({ ...prev, [targetId]: existing }))
           continue
         }
-        const text = getCombinedText([targetId])
+        const para = paragraphs.find(pp => getParagraphId(pp) === targetId)
+        const text = buildMarkedTextForTranslation(para?.content || '')
         setMergedTranslationsMap(prev => ({ ...prev, [targetId]: '' }))
         let appended = false
         let accum = ''
@@ -1087,7 +1110,7 @@ export default function Reader() {
     if (paragraphs.length === 0) return
     try {
       setIsTranslating(true)
-      const text = paragraphs[currentParagraphIndex]?.content || ''
+      const text = buildMarkedTextForTranslation(paragraphs[currentParagraphIndex]?.content || '')
       const bid = getBookKey()
       const pid = getCurrentParagraphId()
       setMergedTranslationsMap(prev => ({ ...prev, [pid]: '' }))
@@ -2211,7 +2234,16 @@ export default function Reader() {
                     </div>
                     {showT && tText && (
                       <div className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: Math.round(readerFontSize*0.95), lineHeight: 1.6, color: '#71717A', fontFamily: 'sans-serif' }}>
-                        {tText}
+                        {(() => {
+                          if (!spotlightMode) return tText
+                          const trs = parseMarkedTranslations(tText)
+                          const currIdx = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
+                          const dim = readerTheme === 'blackWhite' ? 'rgba(255,255,255,0.35)' : 'rgba(55,65,81,0.35)'
+                          const highlightBg = readerTheme === 'yellow' ? 'rgba(245,158,11,0.25)' : readerTheme === 'green' ? 'rgba(34,197,94,0.25)' : readerTheme === 'blackWhite' ? 'rgba(255,255,255,0.25)' : 'rgba(55,65,81,0.12)'
+                          return trs.map((seg, i) => (
+                            <span key={`t-${i}`} style={{ color: seg.idx !== currIdx ? dim : undefined, backgroundColor: seg.idx === currIdx ? highlightBg : 'transparent' }}>{seg.text}</span>
+                          ))
+                        })()}
                       </div>
                     )}
                     {imgUrl && (
