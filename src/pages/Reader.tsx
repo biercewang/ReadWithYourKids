@@ -173,6 +173,7 @@ export default function Reader() {
   const [hoverBottomPlay, setHoverBottomPlay] = useState<boolean>(false)
   const [hoverBottomTts, setHoverBottomTts] = useState<boolean>(false)
   const paragraphJustSwitchedRef = useRef<boolean>(false)
+  const allAudioRef = useRef<Set<HTMLAudioElement>>(new Set())
 
   const formatChapterTitle = (t: string) => {
     const s = (t || '').trim()
@@ -381,26 +382,28 @@ export default function Reader() {
     } catch { }
   }
 
-  const tryPlayPreloaded = async (pid?: string) => {
+  const tryPlayPreloaded = async (pid?: string): Promise<HTMLAudioElement | null> => {
     try {
       const targetId = pid || getCurrentParagraphId()
-      if (!targetId) { await handleTextToSpeech(); return }
+      if (!targetId) { return await handleTextToSpeech() }
       const list = mergedAudiosMap[targetId] || []
       const url = list[0]?.audio_url || ''
       if (url) {
-        stopPlaying()
+        stopAllAudio()
         const audio = new Audio(url)
-        audio.onended = () => { try { setCurrentAudio(null); setIsPlaying(false) } catch { } }
+        allAudioRef.current.add(audio)
+        audio.onended = () => { try { allAudioRef.current.delete(audio); setCurrentAudio(null); setIsPlaying(false) } catch { } }
         setCurrentAudio(audio)
         setIsPlaying(true)
         setTtsStatus('success')
         setTtsSource('doubao')
         setLastTtsModel(ttsVoiceType)
         await audio.play()
-        return
+        return audio
       }
-      await handleTextToSpeech([targetId])
+      return await handleTextToSpeech([targetId])
     } catch { await handleTextToSpeech(pid ? [pid] : undefined) }
+    return null
   }
   
   const disableAudios = (() => {
@@ -873,7 +876,7 @@ export default function Reader() {
     })()
   }, [currentBook, currentChapter, paragraphs])
 
-  const handleTextToSpeech = async (idsOverride?: string[]) => {
+  const handleTextToSpeech = async (idsOverride?: string[]): Promise<HTMLAudioElement | null> => {
     if (paragraphs.length === 0) return
     const ids = (idsOverride && idsOverride.length > 0) ? idsOverride : getOrderedSelectedIds()
     const targetId = ids[0]
@@ -881,7 +884,7 @@ export default function Reader() {
     try {
       setIsTtsPending(true)
       setShowTtsDebug(false)
-      stopPlaying()
+      stopAllAudio()
       const { audioUrl, raw } = await ttsWithDoubaoHttp(text, {
         voice_type: ttsVoiceType,
         language: ttsLanguage || undefined,
@@ -891,8 +894,9 @@ export default function Reader() {
         encoding: 'mp3'
       })
       const audio = new Audio(audioUrl)
+      allAudioRef.current.add(audio)
       audio.onplay = () => setIsPlaying(true)
-      audio.onended = () => { try { setCurrentAudio(null); setIsPlaying(false) } catch { } }
+      audio.onended = () => { try { allAudioRef.current.delete(audio); setCurrentAudio(null); setIsPlaying(false) } catch { } }
       setTtsStatus('success')
       setTtsSource('doubao')
       setTtsDebug(raw)
@@ -901,11 +905,12 @@ export default function Reader() {
       setCurrentAudio(audio)
       await audio.play()
       try { preloadNextParagraphContent() } catch { }
+      return audio
     } catch (e) {
       setIsTtsPending(false)
       setTtsDebug({ error: e instanceof Error ? e.message : String(e) })
       if ('speechSynthesis' in window) {
-        stopPlaying()
+        stopAllAudio()
         const utterance = new SpeechSynthesisUtterance(paragraphs[currentParagraphIndex]?.content || '')
         utterance.lang = 'en-US'
         utterance.rate = 0.8
@@ -920,12 +925,13 @@ export default function Reader() {
         setTtsStatus('error')
         setTtsSource('')
       }
+      return null
     }
   }
 
   const playLatestAudio = async () => {
     try {
-      stopPlaying()
+      stopAllAudio()
       if (currentAudio) {
         try { currentAudio.pause(); currentAudio.currentTime = 0 } catch { }
         setCurrentAudio(null)
@@ -935,7 +941,8 @@ export default function Reader() {
       const url = (audios || [])[0]?.audio_url || ''
       if (url) {
         const audio = new Audio(url)
-        audio.onended = () => { try { setCurrentAudio(null); setIsPlaying(false) } catch { } }
+        allAudioRef.current.add(audio)
+        audio.onended = () => { try { allAudioRef.current.delete(audio); setCurrentAudio(null); setIsPlaying(false) } catch { } }
         audio.play()
         setCurrentAudio(audio)
         setIsPlaying(true)
@@ -955,7 +962,8 @@ export default function Reader() {
       setTtsDebug(raw)
       setLastTtsModel((raw as any)?._voice_type || ttsVoiceType)
       const audio = new Audio(audioUrl)
-      audio.onended = () => { try { setCurrentAudio(null); setIsPlaying(false) } catch { } }
+      allAudioRef.current.add(audio)
+      audio.onended = () => { try { allAudioRef.current.delete(audio); setCurrentAudio(null); setIsPlaying(false) } catch { } }
       audio.play()
       setCurrentAudio(audio)
       setIsPlaying(true)
@@ -968,13 +976,13 @@ export default function Reader() {
     }
   }
 
-  const stopPlaying = () => {
+  const stopAllAudio = () => {
     try {
-      if (currentAudio) {
-        try { currentAudio.pause(); currentAudio.currentTime = 0 } catch { }
-        setCurrentAudio(null)
-        setIsPlaying(false)
-      }
+      const all = Array.from(allAudioRef.current)
+      for (const a of all) { try { a.pause(); a.currentTime = 0 } catch { } }
+      allAudioRef.current.clear()
+      setCurrentAudio(null)
+      setIsPlaying(false)
     } catch { }
     try {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -2201,7 +2209,7 @@ export default function Reader() {
             <button
               onMouseEnter={()=>setHoverBottomTts(true)}
               onMouseLeave={()=>setHoverBottomTts(false)}
-              onClick={async ()=>{ if (isPlaying) { stopPlaying() } else { await tryPlayPreloaded(getCurrentParagraphId()); const a = currentAudio; if (a) { try { a.onended = async () => { setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }}
+              onClick={async ()=>{ if (isTtsPending) { return } if (isPlaying) { stopAllAudio() } else { const a = await tryPlayPreloaded(getCurrentParagraphId()); if (a) { try { a.onended = async () => { try { allAudioRef.current.delete(a) } catch {} ; setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }}
               className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
               style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverBottomTts ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverBottomTts ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverBottomTts ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverBottomTts ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return (isPlaying || isTtsPending) ? active : inactive })(), color: (isPlaying || isTtsPending) ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
             >
@@ -2447,7 +2455,7 @@ export default function Reader() {
           <div className="lg:col-span-1 space-y-6">
             <div className="bg-white rounded-lg shadow-sm border border-slate-200 px-4 py-2 flex items-center justify-evenly w-full">
               <button
-                onClick={async () => { const next = !showVoicePanel; setShowVoicePanel(next); if (next) { stopPlaying(); await handleTextToSpeech() } else { stopPlaying() } }}
+                onClick={async () => { const next = !showVoicePanel; setShowVoicePanel(next); if (next) { stopAllAudio(); if (!isTtsPending) { await handleTextToSpeech() } } else { stopAllAudio() } }}
                 onMouseEnter={() => setHoverVoice(true)}
                 onMouseLeave={() => setHoverVoice(false)}
                 className={`w-9 h-9 inline-flex items-center justify-center rounded-md ${isPlaying ? 'bg-blue-100 text-blue-600 animate-pulse' : (showVoicePanel ? 'bg-blue-100 text-blue-600' : (hoverVoice ? 'bg-gray-100 text-gray-700' : 'text-gray-600'))}`}
