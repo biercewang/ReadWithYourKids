@@ -177,7 +177,7 @@ export default function Reader() {
 
   const splitSentences = (text: string): string[] => {
     try {
-      const arr = (text || '').match(/[^。\.！？!?]+[。\.！？!?]?/g) || [text]
+      const arr = (text || '').match(/[^。\.！？!?]+(?:[。\.！？!?](?:[”’』」》】])*)?/g) || [text]
       return arr.map(s => s.trim()).filter(s => s.length > 0)
     } catch {
       const s = (text || '').trim()
