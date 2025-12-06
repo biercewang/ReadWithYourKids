@@ -56,7 +56,7 @@ export const RHYTHM_CONFIG = {
   delays: {
     comma: 200,
     sentence: 500,
-    paragraph: 800,
+    paragraph: 600,
   },
   factors: {
     stopWord: 0.75,
@@ -64,6 +64,11 @@ export const RHYTHM_CONFIG = {
     longWord: 1.3,
     veryLong: 1.5,
   },
+}
+
+export function paragraphStartDelayMs(baseMs: number): number {
+  const d = Math.round(baseMs * 1.1)
+  return Math.max(220, Math.min(600, d))
 }
 
 export function splitIntoTokens(textRaw: string): Array<{ text: string; hasNewLine?: boolean }>{

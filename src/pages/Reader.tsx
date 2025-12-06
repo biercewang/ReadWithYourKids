@@ -11,7 +11,7 @@ import { Paragraph, Image as ImgType } from '../types/database'
 import { useNotesStore } from '../store/notes'
 import { useTranslationsStore } from '../store/translations'
 import { Note } from '../types/notes'
-import { baseMsFromWpm, calculate_word_durations, RHYTHM_CONFIG } from '../utils/rhythm'
+import { baseMsFromWpm, calculate_word_durations, RHYTHM_CONFIG, paragraphStartDelayMs } from '../utils/rhythm'
 
 export default function Reader() {
   const { bookId } = useParams<{ bookId: string }>()
@@ -169,6 +169,7 @@ export default function Reader() {
   const resumeFirstRef = useRef<boolean>(false)
   const cursorHideTimerRef = useRef<number | null>(null)
   const [spotlightWpm, setSpotlightWpm] = useState<number>(() => { try { const v = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('spotlight_wpm') || '' : ''), 10); const d = !isNaN(v) && v > 0 ? v : 120; return Math.max(40, Math.min(300, d)) } catch { return 120 } })
+  const paragraphJustSwitchedRef = useRef<boolean>(false)
 
   const formatChapterTitle = (t: string) => {
     const s = (t || '').trim()
@@ -180,10 +181,12 @@ export default function Reader() {
 
   const splitSentences = (text: string): string[] => {
     try {
-      const arr = (text || '').match(/[^。\.！？!?…．.]+(?:[。\.！？!?…．.]+(?:[”’』」》】])*)?/g) || [text]
-      return arr.map(s => s.trim()).filter(s => s.length > 0)
+      const src = text || ''
+      const matches = Array.from(src.matchAll(/\s*[^。\.！？!?…．.]+(?:[。\.！？!?…．.]+(?:[”’』」》】])*)?/g))
+      const arr = matches.map(m => m[0]).filter(s => s && s.length > 0)
+      return arr
     } catch {
-      const s = (text || '').trim()
+      const s = (text || '')
       return s.length > 0 ? [s] : []
     }
   }
@@ -266,7 +269,14 @@ export default function Reader() {
       spotlightTimerRef.current = window.setTimeout(() => step(idx + 1, false), delay)
     }
     const startIdx = Math.max(0, spotlightTokenIndex >= 0 ? spotlightTokenIndex : 0)
-    step(startIdx, true)
+    if (paragraphJustSwitchedRef.current && startIdx === 0) {
+      const baseMs = baseMsFromWpm(spotlightWpm)
+      const d = paragraphStartDelayMs(baseMs)
+      paragraphJustSwitchedRef.current = false
+      spotlightTimerRef.current = window.setTimeout(() => step(startIdx, true), d)
+    } else {
+      step(startIdx, true)
+    }
     return () => { if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } }
   }, [spotlightMode, currentParagraphIndex, spotlightSentenceMap, spotlightWpm])
 
@@ -277,6 +287,7 @@ export default function Reader() {
       setSpotlightSentenceMap(prev => ({ ...prev, [pid]: 0 }))
       setSpotlightCompleted(prev => { const s = new Set(prev); s.delete(pid); return s })
       setSpotlightTokenIndex(-1)
+      paragraphJustSwitchedRef.current = true
     }
   }, [currentParagraphIndex])
 
