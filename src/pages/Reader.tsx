@@ -2233,15 +2233,14 @@ export default function Reader() {
                       ) : p.content}
                     </div>
                     {showT && tText && (
-                      <div className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: Math.round(readerFontSize*0.95), lineHeight: 1.6, color: '#71717A', fontFamily: 'sans-serif' }}>
+                      <div className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: Math.round(readerFontSize*0.95), lineHeight: 1.6, color: v2TextColor, fontFamily: 'sans-serif' }}>
                         {(() => {
-                          if (!spotlightMode) return tText
+                          if (!spotlightMode) return tText.replace(/\[\[S\d+\]\]\s*/g, '')
                           const trs = parseMarkedTranslations(tText)
                           const currIdx = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
                           const dim = readerTheme === 'blackWhite' ? 'rgba(255,255,255,0.35)' : 'rgba(55,65,81,0.35)'
-                          const highlightBg = readerTheme === 'yellow' ? 'rgba(245,158,11,0.25)' : readerTheme === 'green' ? 'rgba(34,197,94,0.25)' : readerTheme === 'blackWhite' ? 'rgba(255,255,255,0.25)' : 'rgba(55,65,81,0.12)'
                           return trs.map((seg, i) => (
-                            <span key={`t-${i}`} style={{ color: seg.idx !== currIdx ? dim : undefined, backgroundColor: seg.idx === currIdx ? highlightBg : 'transparent' }}>{seg.text}</span>
+                            <span key={`t-${i}`} style={{ color: seg.idx !== currIdx ? dim : undefined }}>{seg.text}</span>
                           ))
                         })()}
                       </div>
