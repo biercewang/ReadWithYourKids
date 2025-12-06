@@ -40,6 +40,11 @@ export default function Reader() {
   const [hoverSettings, setHoverSettings] = useState(false)
   const [readerFontSize, setReaderFontSize] = useState<number>(() => { try { const v = parseInt(localStorage.getItem('reader_font_size') || '18', 10); return isNaN(v) ? 18 : v } catch { return 18 } })
   const [readerFontFamily, setReaderFontFamily] = useState<string>(() => { try { return localStorage.getItem('reader_font_family') || 'system-ui' } catch { return 'system-ui' } })
+  const [translationFontFamily, setTranslationFontFamily] = useState<string>(() => {
+    try {
+      return localStorage.getItem('translation_font_family') || "system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', 'SimHei', 'SimSun', sans-serif"
+    } catch { return "system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', 'SimHei', 'SimSun', sans-serif" }
+  })
   const [readerTheme, setReaderTheme] = useState<string>(() => { try { return localStorage.getItem('reader_theme') || 'white' } catch { return 'white' } })
   const [translationProvider, setTranslationProvider] = useState<string>(() => {
     try {
@@ -465,15 +470,33 @@ export default function Reader() {
     { label: 'Serif', value: 'serif' },
     { label: 'Sans', value: 'sans-serif' },
   ]
+  const CN_FONT_OPTIONS_V2: { label: string; value: string }[] = [
+    { label: '系统中文', value: "system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', 'SimHei', 'SimSun', sans-serif" },
+    { label: 'Noto Sans SC', value: "'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif" },
+    { label: 'Source Han Sans', value: "'Source Han Sans SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif" },
+    { label: 'Noto Serif SC', value: "'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', serif" },
+    { label: 'Source Han Serif', value: "'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', 'SimSun', serif" },
+    { label: 'Microsoft YaHei', value: "'Microsoft YaHei', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif" },
+  ]
   const cycleFontNext = () => {
     const idx = Math.max(0, FONT_OPTIONS_V2.findIndex(o => o.value === readerFontFamily))
     const next = FONT_OPTIONS_V2[(idx + 1) % FONT_OPTIONS_V2.length]
     setReaderFontFamily(next.value)
     try { localStorage.setItem('reader_font_family', next.value) } catch { }
   }
+  const cycleTransFontNext = () => {
+    const idx = Math.max(0, CN_FONT_OPTIONS_V2.findIndex(o => o.value === translationFontFamily))
+    const next = CN_FONT_OPTIONS_V2[(idx + 1) % CN_FONT_OPTIONS_V2.length]
+    setTranslationFontFamily(next.value)
+    try { localStorage.setItem('translation_font_family', next.value) } catch { }
+  }
   const currentFontLabel = (() => {
     const found = FONT_OPTIONS_V2.find(o => o.value === readerFontFamily)
     return found ? found.label : 'System'
+  })()
+  const currentTransFontLabel = (() => {
+    const found = CN_FONT_OPTIONS_V2.find(o => o.value === translationFontFamily)
+    return found ? found.label : '系统中文'
   })()
 
   useEffect(() => {
@@ -2134,10 +2157,19 @@ export default function Reader() {
                         <div className="mt-1 text-xs" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>{spotlightSpeedFactor.toFixed(2)}×</div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>字体</div>
+                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>原文字体</div>
                         <div className="flex items-center space-x-2">
                           <div className={`px-3 py-1 rounded-full ${readerTheme === 'yellow' ? 'bg-amber-100 text-amber-700' : readerTheme === 'green' ? 'bg-green-100 text-green-700' : readerTheme === 'blackWhite' ? 'bg-white text-black' : 'bg-gray-100 text-gray-700'}`}>{currentFontLabel}</div>
-                          <button onClick={cycleFontNext} className={`w-7 h-7 rounded-full inline-flex items-center justify-center ${readerTheme === 'yellow' ? 'bg-amber-200 text-amber-800' : readerTheme === 'green' ? 'bg-green-200 text-green-800' : readerTheme === 'blackWhite' ? 'bg-white text-black' : 'bg-gray-200 text-gray-800'} hover:scale-105 active:scale-95`} title="切换字体">
+                          <button onClick={cycleFontNext} className={`w-7 h-7 rounded-full inline-flex items-center justify-center ${readerTheme === 'yellow' ? 'bg-amber-200 text-amber-800' : readerTheme === 'green' ? 'bg-green-200 text-green-800' : readerTheme === 'blackWhite' ? 'bg-white text-black' : 'bg-gray-200 text-gray-800'} hover:scale-105 active:scale-95`} title="切换原文字体">
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>译文字体</div>
+                        <div className="flex items-center space-x-2">
+                          <div className={`px-3 py-1 rounded-full ${readerTheme === 'yellow' ? 'bg-amber-100 text-amber-700' : readerTheme === 'green' ? 'bg-green-100 text-green-700' : readerTheme === 'blackWhite' ? 'bg-white text-black' : 'bg-gray-100 text-gray-700'}`}>{currentTransFontLabel}</div>
+                          <button onClick={cycleTransFontNext} className={`w-7 h-7 rounded-full inline-flex items-center justify-center ${readerTheme === 'yellow' ? 'bg-amber-200 text-amber-800' : readerTheme === 'green' ? 'bg-green-200 text-green-800' : readerTheme === 'blackWhite' ? 'bg-white text-black' : 'bg-gray-200 text-gray-800'} hover:scale-105 active:scale-95`} title="切换译文字体">
                             <ChevronRight className="h-4 w-4" />
                           </button>
                         </div>
@@ -2233,7 +2265,7 @@ export default function Reader() {
                       ) : p.content}
                     </div>
                     {showT && tText && (
-                      <div className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: Math.round(readerFontSize*0.95), lineHeight: 1.6, color: v2TextColor, fontFamily: 'sans-serif' }}>
+                      <div className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: Math.round(readerFontSize*0.95), lineHeight: 1.6, color: v2TextColor, fontFamily: translationFontFamily }}>
                         {(() => {
                           if (!spotlightMode) {
                             const noMarks = tText.replace(/\[\[S\d+\]\]\s*/g, '')
@@ -2452,7 +2484,7 @@ export default function Reader() {
                               <div className="flex-1 pr-2">
                                 <p className={`leading-relaxed ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'text-white' : (readerTheme === 'whiteBlack' ? 'text-black' : 'text-gray-800')} w-full whitespace-pre-wrap break-words`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>{p.content}</p>
                                 {tText && (
-                                  <div className={`mt-4 rounded-md p-2 whitespace-pre-wrap break-words border ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'bg-white/10 text-white border-white/20' : 'bg-blue-50 text-blue-900 border-blue-200'}`} style={{ fontSize: Math.max(10, readerFontSize - 2), fontFamily: readerFontFamily }}>{tText}</div>
+                                  <div className={`mt-4 rounded-md p-2 whitespace-pre-wrap break-words border ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'bg-white/10 text-white border-white/20' : 'bg-blue-50 text-blue-900 border-blue-200'}`} style={{ fontSize: Math.max(10, readerFontSize - 2), fontFamily: translationFontFamily }}>{tText}</div>
                                 )}
                                 {imgUrl && (
                                   <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
