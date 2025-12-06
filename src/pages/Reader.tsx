@@ -42,8 +42,8 @@ export default function Reader() {
   const [readerFontFamily, setReaderFontFamily] = useState<string>(() => { try { return localStorage.getItem('reader_font_family') || 'system-ui' } catch { return 'system-ui' } })
   const [translationFontFamily, setTranslationFontFamily] = useState<string>(() => {
     try {
-      return localStorage.getItem('translation_font_family') || "system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', 'SimHei', 'SimSun', sans-serif"
-    } catch { return "system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', 'SimHei', 'SimSun', sans-serif" }
+      return localStorage.getItem('translation_font_family') || "system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', 'SimHei', Arial, sans-serif"
+    } catch { return "system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', 'SimHei', Arial, sans-serif" }
   })
   const [readerTheme, setReaderTheme] = useState<string>(() => { try { return localStorage.getItem('reader_theme') || 'white' } catch { return 'white' } })
   const [translationProvider, setTranslationProvider] = useState<string>(() => {
@@ -481,12 +481,11 @@ export default function Reader() {
     { label: 'Sans', value: 'sans-serif' },
   ]
   const CN_FONT_OPTIONS_V2: { label: string; value: string }[] = [
-    { label: '系统中文', value: "system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', 'SimHei', 'SimSun', sans-serif" },
-    { label: 'Noto Sans SC', value: "'Noto Sans SC', 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif" },
-    { label: 'Source Han Sans', value: "'Source Han Sans SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif" },
-    { label: 'Noto Serif SC', value: "'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', serif" },
-    { label: 'Source Han Serif', value: "'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', 'SimSun', serif" },
-    { label: 'Microsoft YaHei', value: "'Microsoft YaHei', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif" },
+    { label: '系统中文（无衬线）', value: "system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'WenQuanYi Micro Hei', 'SimHei', Arial, sans-serif" },
+    { label: '苹方（Mac/iOS）', value: "'PingFang SC', system-ui, -apple-system, BlinkMacSystemFont, 'Hiragino Sans GB', 'Microsoft YaHei', 'SimHei', Arial, sans-serif" },
+    { label: '冬青黑体（Mac）', value: "'Hiragino Sans GB', system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif" },
+    { label: '微软雅黑（Windows）', value: "'Microsoft YaHei', system-ui, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'SimHei', Arial, sans-serif" },
+    { label: '宋体（衬线）', value: "'SimSun', 'NSimSun', 'Songti SC', 'Times New Roman', serif" },
   ]
   const cycleFontNext = () => {
     const idx = Math.max(0, FONT_OPTIONS_V2.findIndex(o => o.value === readerFontFamily))
