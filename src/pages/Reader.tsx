@@ -2566,6 +2566,11 @@ export default function Reader() {
                       <option value="'Courier New', Courier, monospace">Courier New</option>
                       <option value="'Segoe UI', Tahoma, Geneva, Verdana, sans-serif">Segoe UI</option>
                       <option value="Calibri, 'Segoe UI', Arial, sans-serif">Calibri</option>
+                      <option value="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif">Inter（阅读优化 Sans）</option>
+                      <option value="'Roboto', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif">Roboto（通用 Sans）</option>
+                      <option value="'Lora', Georgia, serif">Lora（阅读优化 Serif）</option>
+                      <option value="'Merriweather', Georgia, serif">Merriweather（阅读优化 Serif）</option>
+                      <option value="'Source Serif 4', Georgia, serif">Source Serif 4（现代 Serif）</option>
                     </select>
                   </div>
                   <div>
