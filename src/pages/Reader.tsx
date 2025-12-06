@@ -2311,10 +2311,10 @@ export default function Reader() {
             </div>
           </div>
         )}
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 group">
           <div
-            className="px-4 py-2 rounded-full backdrop-blur-lg shadow-lg ring-1 ring-black/5 flex items-center space-x-3"
-            style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)', backgroundColor: readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.8)' : 'rgba(255,255,255,0.8)' }}
+            className={`px-4 py-2 rounded-full backdrop-blur-lg shadow-lg ring-1 ring-black/5 flex items-center space-x-3 transition-colors ${readerTheme === 'blackWhite' ? 'bg-gray-700/20 group-hover:bg-gray-700/90' : 'bg-white/20 group-hover:bg-white'}`}
+            style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }}
           >
             <button onMouseEnter={()=>setHoverBottomPlay(true)} onMouseLeave={()=>setHoverBottomPlay(false)} onClick={()=>{ if (spotlightMode) { setSpotlightMode(false); setSpotlightTokenIndex(-1); if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } } else { const pid = getCurrentParagraphId(); if (pid) { setSpotlightMode(true); setSpotlightSentenceMap(prev => ({ ...prev, [pid]: typeof prev[pid] === 'number' && prev[pid] >= 0 ? prev[pid] : 0 })); setSpotlightCompleted(prev => { const s = new Set(prev); s.delete(pid); return s }); setSpotlightTokenIndex(-1) } } }} className="w-10 h-10 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none" style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverBottomPlay ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverBottomPlay ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverBottomPlay ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverBottomPlay ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverBottomPlay ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverBottomPlay ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return spotlightMode ? active : inactive })(), color: spotlightMode ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>
               {spotlightMode ? (<Square className="h-5 w-5" />) : (<Play className="h-5 w-5" />)}
