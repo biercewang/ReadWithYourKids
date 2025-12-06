@@ -2109,8 +2109,7 @@ export default function Reader() {
               <div className="relative">
                 <button
                   onClick={() => setShowSettingsPanel(v => !v)}
-                  className="v2-settings-trigger w-9 h-9 rounded-full backdrop-blur-lg shadow-sm inline-flex items-center justify-center hover:scale-105 active:scale-95"
-                  style={{ backgroundColor: readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.8)' : 'rgba(255,255,255,0.8)', color: readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' }}
+                  className={`v2-settings-trigger w-9 h-9 rounded-full inline-flex items-center justify-center bg-transparent text-gray-400 hover:scale-105 active:scale-95 ${readerTheme === 'yellow' ? 'hover:bg-amber-200 hover:text-amber-800' : readerTheme === 'green' ? 'hover:bg-green-200 hover:text-green-800' : readerTheme === 'blackWhite' ? 'hover:bg-white hover:text-black' : 'hover:bg-gray-200 hover:text-gray-800'}`}
                 >
                   <Type className="h-5 w-5" />
                 </button>
