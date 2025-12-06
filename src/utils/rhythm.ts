@@ -71,6 +71,11 @@ export function paragraphStartDelayMs(baseMs: number): number {
   return Math.max(220, Math.min(600, d))
 }
 
+export function scaledDelay(baseDelay: number, speedFactor: number = 1): number {
+  const sf = Math.max(0.5, Math.min(2.5, speedFactor || 1))
+  return Math.max(60, Math.floor(baseDelay / sf))
+}
+
 export function splitIntoTokens(textRaw: string): Array<{ text: string; hasNewLine?: boolean }>{
   const res: Array<{ text: string; hasNewLine?: boolean }> = []
   let buff = ''
@@ -89,7 +94,7 @@ export function splitIntoTokens(textRaw: string): Array<{ text: string; hasNewLi
   return res
 }
 
-export function calculate_word_durations(textRaw: string, baseMs: number, opts?: { isLastSentence?: boolean; isParagraphEnd?: boolean }): ProcessedToken[] {
+export function calculate_word_durations(textRaw: string, baseMs: number, opts?: { isLastSentence?: boolean; isParagraphEnd?: boolean }, speedFactor: number = 1): ProcessedToken[] {
   const tokens = splitIntoTokens(textRaw)
   const isParagraphEnd = !!(opts && opts.isParagraphEnd)
   return tokens.map((token, index) => {
@@ -105,9 +110,9 @@ export function calculate_word_durations(textRaw: string, baseMs: number, opts?:
     let isSentEnd = false
     let isParaEnd = false
 
-    if (/[,:;，；：]/.test(token.text)) punctDelay += RHYTHM_CONFIG.delays.comma
-    if (/[.?!。？！]/.test(token.text)) { punctDelay += RHYTHM_CONFIG.delays.sentence; isSentEnd = true }
-    if (token.hasNewLine || (index === tokens.length - 1 && isParagraphEnd)) { punctDelay += RHYTHM_CONFIG.delays.paragraph; isParaEnd = true }
+    if (/[,:;，；：]/.test(token.text)) punctDelay += scaledDelay(RHYTHM_CONFIG.delays.comma, speedFactor)
+    if (/[.?!。？！]/.test(token.text)) { punctDelay += scaledDelay(RHYTHM_CONFIG.delays.sentence, speedFactor); isSentEnd = true }
+    if (token.hasNewLine || (index === tokens.length - 1 && isParagraphEnd)) { punctDelay += scaledDelay(RHYTHM_CONFIG.delays.paragraph, speedFactor); isParaEnd = true }
 
     const baseDuration = Math.floor(Math.max(120, baseMs) * multiplier)
     const totalDuration = Math.floor(baseDuration + punctDelay)

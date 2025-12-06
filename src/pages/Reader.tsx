@@ -11,7 +11,7 @@ import { Paragraph, Image as ImgType } from '../types/database'
 import { useNotesStore } from '../store/notes'
 import { useTranslationsStore } from '../store/translations'
 import { Note } from '../types/notes'
-import { baseMsFromWpm, calculate_word_durations, RHYTHM_CONFIG, paragraphStartDelayMs } from '../utils/rhythm'
+import { baseMsFromWpm, calculate_word_durations, RHYTHM_CONFIG, paragraphStartDelayMs, scaledDelay } from '../utils/rhythm'
 
 export default function Reader() {
   const { bookId } = useParams<{ bookId: string }>()
@@ -169,6 +169,7 @@ export default function Reader() {
   const resumeFirstRef = useRef<boolean>(false)
   const cursorHideTimerRef = useRef<number | null>(null)
   const [spotlightWpm, setSpotlightWpm] = useState<number>(() => { try { const v = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('spotlight_wpm') || '' : ''), 10); const d = !isNaN(v) && v > 0 ? v : 120; return Math.max(40, Math.min(300, d)) } catch { return 120 } })
+  const [spotlightSpeedFactor, setSpotlightSpeedFactor] = useState<number>(1)
   const [hoverBottomPlay, setHoverBottomPlay] = useState<boolean>(false)
   const [hoverBottomTts, setHoverBottomTts] = useState<boolean>(false)
   const paragraphJustSwitchedRef = useRef<boolean>(false)
@@ -275,12 +276,13 @@ export default function Reader() {
     }
     if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current) }
     const step = (idx: number, firstTick: boolean) => {
-      const baseMs = baseMsFromWpm(spotlightWpm)
+      const baseMs = baseMsFromWpm(spotlightWpm * spotlightSpeedFactor)
       const isLastSentence = curr === sents.length - 1
-      const processed = calculate_word_durations(sentence, baseMs, { isLastSentence, isParagraphEnd: isLastSentence })
+      const processed = calculate_word_durations(sentence, baseMs, { isLastSentence, isParagraphEnd: isLastSentence }, spotlightSpeedFactor)
       if (idx >= processed.length) {
         const last = processed[processed.length - 1]
-        const pauseMs = Math.max(120, (last?.punctuationDelay || 0) + (isLastSentence ? RHYTHM_CONFIG.delays.paragraph : 0))
+        const extraPara = isLastSentence ? scaledDelay(RHYTHM_CONFIG.delays.paragraph, spotlightSpeedFactor) : 0
+        const pauseMs = Math.max(120, (last?.punctuationDelay || 0) + extraPara)
         setSpotlightTokenIndex(processed.length - 1)
         spotlightTimerRef.current = window.setTimeout(() => { advanceSpotlight() }, pauseMs)
         return
@@ -293,7 +295,7 @@ export default function Reader() {
     }
     const startIdx = Math.max(0, spotlightTokenIndex >= 0 ? spotlightTokenIndex : 0)
     if (paragraphJustSwitchedRef.current && startIdx === 0) {
-      const baseMs = baseMsFromWpm(spotlightWpm)
+      const baseMs = baseMsFromWpm(spotlightWpm * spotlightSpeedFactor)
       const d = paragraphStartDelayMs(baseMs)
       paragraphJustSwitchedRef.current = false
       spotlightTimerRef.current = window.setTimeout(() => step(startIdx, true), d)
@@ -301,7 +303,7 @@ export default function Reader() {
       step(startIdx, true)
     }
     return () => { if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } }
-  }, [spotlightMode, currentParagraphIndex, spotlightSentenceMap, spotlightWpm])
+  }, [spotlightMode, currentParagraphIndex, spotlightSentenceMap, spotlightWpm, spotlightSpeedFactor])
 
 
   useEffect(() => {
@@ -1847,10 +1849,18 @@ export default function Reader() {
         } catch { }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
-        extendDown()
+        if (spotlightMode) {
+          setSpotlightSpeedFactor(f => Math.max(0.5, Math.min(2.0, parseFloat((f - 0.1).toFixed(2)))))
+        } else {
+          extendDown()
+        }
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
-        shrinkTop()
+        if (spotlightMode) {
+          setSpotlightSpeedFactor(f => Math.max(0.5, Math.min(2.0, parseFloat((f + 0.1).toFixed(2)))))
+        } else {
+          shrinkTop()
+        }
       }
     }
     window.addEventListener('keydown', onKeyDown)
