@@ -225,7 +225,6 @@ export default function Reader() {
 
   useEffect(() => {
     if (!spotlightMode) {
-      setSpotlightTokenIndex(-1)
       if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null }
       return
     }
@@ -256,7 +255,8 @@ export default function Reader() {
       setSpotlightTokenIndex(idx)
       spotlightTimerRef.current = window.setTimeout(() => step(idx + 1), baseMs)
     }
-    step(0)
+    const startIdx = Math.max(0, spotlightTokenIndex >= 0 ? spotlightTokenIndex + 1 : 0)
+    step(startIdx)
     return () => { if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } }
   }, [spotlightMode, currentParagraphIndex, spotlightSentenceMap, spotlightWpm])
 
@@ -1762,10 +1762,20 @@ export default function Reader() {
         handleNextParagraph()
       } else if (e.key === 'Enter') {
         e.preventDefault()
-        handleNextParagraph()
+        advanceSpotlight()
       } else if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault()
-        advanceSpotlight()
+        try {
+          const pid = getCurrentParagraphId()
+          const curr = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
+          if (!spotlightMode) {
+            setSpotlightMode(true)
+            if (curr < 0) setSpotlightSentenceMap(prev => ({ ...prev, [pid]: 0 }))
+            return
+          }
+          if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null }
+          setSpotlightMode(false)
+        } catch { }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault()
         extendDown()
