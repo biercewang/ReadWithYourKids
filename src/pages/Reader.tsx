@@ -1028,46 +1028,53 @@ export default function Reader() {
     try {
       const bid = getBookKey()
       const ids = (idsOverride && idsOverride.length > 0) ? idsOverride : getOrderedSelectedIds()
-      const targetId = ids[0]
-      const text = getCombinedText(ids)
       setIsTranslating(true)
-      setMergedTranslationsMap(prev => ({ ...prev, [targetId]: '' }))
-      let appended = false
-      let accum = ''
-      let buf = ''
-      let flushing = false
-      const flush = () => {
-        if (buf.length === 0) { flushing = false; return }
-        const take = Math.min(3, buf.length)
-        const piece = buf.slice(0, take)
-        buf = buf.slice(take)
-        setMergedTranslationsMap(prev => ({ ...prev, [targetId]: (prev[targetId] || '') + piece }))
-        setTimeout(flush, 30)
-      }
-      if (translationProvider === 'openrouter') {
-        await translateWithOpenRouterStream(text, (s) => {
-          appended = true
-          accum += s
-          buf += s
+      for (const targetId of ids) {
+        const storeText = (translations || []).find(t => t.paragraph_id === targetId)?.translated_text || ''
+        const existing = mergedTranslationsMap[targetId] || storeText
+        if (existing && existing.length > 0) {
+          setMergedTranslationsMap(prev => ({ ...prev, [targetId]: existing }))
+          continue
+        }
+        const text = getCombinedText([targetId])
+        setMergedTranslationsMap(prev => ({ ...prev, [targetId]: '' }))
+        let appended = false
+        let accum = ''
+        let buf = ''
+        let flushing = false
+        const flush = () => {
+          if (buf.length === 0) { flushing = false; return }
+          const take = Math.min(3, buf.length)
+          const piece = buf.slice(0, take)
+          buf = buf.slice(take)
+          setMergedTranslationsMap(prev => ({ ...prev, [targetId]: (prev[targetId] || '') + piece }))
+          setTimeout(flush, 30)
+        }
+        if (translationProvider === 'openrouter') {
+          await translateWithOpenRouterStream(text, (s) => {
+            appended = true
+            accum += s
+            buf += s
+            if (!flushing) { flushing = true; flush() }
+          }, 'zh', translationOpenRouterModel)
+        } else {
+          await translateWithGeminiStream(text, (s) => {
+            appended = true
+            accum += s
+            buf += s
+            if (!flushing) { flushing = true; flush() }
+          }, 'zh')
+        }
+        if (!appended) {
+          const full = translationProvider === 'openrouter'
+            ? await translateWithOpenRouter(text, 'zh', translationOpenRouterModel)
+            : await translateWithGemini(text, 'zh')
+          buf += full
           if (!flushing) { flushing = true; flush() }
-        }, 'zh', translationOpenRouterModel)
-      } else {
-        await translateWithGeminiStream(text, (s) => {
-          appended = true
-          accum += s
-          buf += s
-          if (!flushing) { flushing = true; flush() }
-        }, 'zh')
-      }
-      if (!appended) {
-        const full = translationProvider === 'openrouter'
-          ? await translateWithOpenRouter(text, 'zh', translationOpenRouterModel)
-          : await translateWithGemini(text, 'zh')
-        buf += full
-        if (!flushing) { flushing = true; flush() }
-        if (full && full.length > 0) addTranslation(bid, targetId, full, 'zh')
-      } else {
-        if (accum && accum.length > 0) addTranslation(bid, targetId, accum, 'zh')
+          if (full && full.length > 0) addTranslation(bid, targetId, full, 'zh')
+        } else {
+          if (accum && accum.length > 0) addTranslation(bid, targetId, accum, 'zh')
+        }
       }
     } catch (e) {
       alert(e instanceof Error ? e.message : '翻译失败')
