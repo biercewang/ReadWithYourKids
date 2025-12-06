@@ -56,7 +56,7 @@ export const RHYTHM_CONFIG = {
   delays: {
     comma: 200,
     sentence: 500,
-    paragraph: 1200,
+    paragraph: 800,
   },
   factors: {
     stopWord: 0.75,
