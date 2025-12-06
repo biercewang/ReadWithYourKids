@@ -11,6 +11,7 @@ import { Paragraph, Image as ImgType } from '../types/database'
 import { useNotesStore } from '../store/notes'
 import { useTranslationsStore } from '../store/translations'
 import { Note } from '../types/notes'
+import { baseMsFromWpm, calculate_word_durations, RHYTHM_CONFIG } from '../utils/rhythm'
 
 export default function Reader() {
   const { bookId } = useParams<{ bookId: string }>()
@@ -165,6 +166,7 @@ export default function Reader() {
   const [spotlightCompleted, setSpotlightCompleted] = useState<Set<string>>(new Set())
   const [spotlightTokenIndex, setSpotlightTokenIndex] = useState<number>(-1)
   const spotlightTimerRef = useRef<number | null>(null)
+  const resumeFirstRef = useRef<boolean>(false)
   const cursorHideTimerRef = useRef<number | null>(null)
   const [spotlightWpm, setSpotlightWpm] = useState<number>(() => { try { const v = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('spotlight_wpm') || '' : ''), 10); const d = !isNaN(v) && v > 0 ? v : 120; return Math.max(40, Math.min(300, d)) } catch { return 120 } })
 
@@ -246,31 +248,28 @@ export default function Reader() {
       return
     }
     if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current) }
-    const step = (idx: number) => {
-      const baseMs = Math.max(150, Math.round(60000 / Math.max(40, Math.min(300, spotlightWpm))))
-      if (idx >= wordTokens.length) {
-        setSpotlightTokenIndex(wordTokens.length - 1)
-        spotlightTimerRef.current = window.setTimeout(() => { advanceSpotlight() }, baseMs)
+    const step = (idx: number, firstTick: boolean) => {
+      const baseMs = baseMsFromWpm(spotlightWpm)
+      const isLastSentence = curr === sents.length - 1
+      const processed = calculate_word_durations(sentence, baseMs, { isLastSentence, isParagraphEnd: isLastSentence })
+      if (idx >= processed.length) {
+        const last = processed[processed.length - 1]
+        const pauseMs = Math.max(120, (last?.punctuationDelay || 0) + (isLastSentence ? RHYTHM_CONFIG.delays.paragraph : 0))
+        setSpotlightTokenIndex(processed.length - 1)
+        spotlightTimerRef.current = window.setTimeout(() => { advanceSpotlight() }, pauseMs)
         return
       }
+      const extraResume = firstTick && resumeFirstRef.current
+      const delay = processed[idx].totalDuration + (extraResume ? Math.round(baseMs * 0.4) : 0)
+      if (extraResume) resumeFirstRef.current = false
       setSpotlightTokenIndex(idx)
-      spotlightTimerRef.current = window.setTimeout(() => step(idx + 1), baseMs)
+      spotlightTimerRef.current = window.setTimeout(() => step(idx + 1, false), delay)
     }
-    const startIdx = Math.max(0, spotlightTokenIndex >= 0 ? spotlightTokenIndex + 1 : 0)
-    step(startIdx)
+    const startIdx = Math.max(0, spotlightTokenIndex >= 0 ? spotlightTokenIndex : 0)
+    step(startIdx, true)
     return () => { if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } }
   }, [spotlightMode, currentParagraphIndex, spotlightSentenceMap, spotlightWpm])
 
-  useEffect(() => {
-    if (spotlightMode) {
-      const pid = getCurrentParagraphId()
-      if (pid) {
-        setSpotlightSentenceMap(prev => ({ ...prev, [pid]: 0 }))
-        setSpotlightCompleted(prev => { const s = new Set(prev); s.delete(pid); return s })
-        setSpotlightTokenIndex(-1)
-      }
-    }
-  }, [spotlightMode, currentParagraphIndex])
 
   useEffect(() => {
     const pid = getCurrentParagraphId()
@@ -1797,6 +1796,7 @@ export default function Reader() {
           const curr = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
           if (!spotlightMode) {
             setSpotlightMode(true)
+            resumeFirstRef.current = (curr >= 0 && spotlightTokenIndex >= 0)
             if (curr < 0) setSpotlightSentenceMap(prev => ({ ...prev, [pid]: 0 }))
             return
           }
