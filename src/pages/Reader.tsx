@@ -2013,8 +2013,8 @@ export default function Reader() {
                         <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>字号</div>
                         <input
                           type="range"
-                          min={14}
-                          max={24}
+                          min={12}
+                          max={36}
                           value={readerFontSize}
                           onChange={(e)=>setReaderFontSize(parseInt(e.target.value,10))}
                           className={`w-full v2-range ${readerTheme}`}
@@ -2028,7 +2028,7 @@ export default function Reader() {
                             borderRadius: 9999,
                             backgroundImage: `linear-gradient(${readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151'}, ${readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151'}), linear-gradient(${readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB'}, ${readerTheme === 'blackWhite' ? '#4B5563' : '#E5E7EB'})`,
                             backgroundRepeat: 'no-repeat',
-                            backgroundSize: `${Math.round(((readerFontSize - 14) / (24 - 14)) * 100)}% 100%, 100% 100%`
+                            backgroundSize: `${Math.round(((readerFontSize - 12) / (36 - 12)) * 100)}% 100%, 100% 100%`
                           }}
                         />
                       </div>
@@ -2060,8 +2060,14 @@ export default function Reader() {
                       <div className="flex items-center justify-between">
                         <div className="text-sm" style={{ color: (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>字体</div>
                         <div className="space-x-2">
-                          <button onClick={()=>setReaderFontFamily('serif')} className={`px-3 py-1 rounded-full ${readerFontFamily==='serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Serif</button>
-                          <button onClick={()=>setReaderFontFamily('sans-serif')} className={`px-3 py-1 rounded-full ${readerFontFamily==='sans-serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Sans</button>
+                          <button onClick={()=>{ setReaderFontFamily('system-ui'); try { localStorage.setItem('reader_font_family', 'system-ui') } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==='system-ui'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>System</button>
+                          <button onClick={()=>{ const v = "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Inter</button>
+                          <button onClick={()=>{ const v = "'Roboto', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Roboto', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Roboto</button>
+                          <button onClick={()=>{ const v = "'Lora', Georgia, serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Lora', Georgia, serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Lora</button>
+                          <button onClick={()=>{ const v = "'Merriweather', Georgia, serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Merriweather', Georgia, serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Merriweather</button>
+                          <button onClick={()=>{ const v = "'Source Serif 4', Georgia, serif"; setReaderFontFamily(v); try { localStorage.setItem('reader_font_family', v) } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==="'Source Serif 4', Georgia, serif"?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Source Serif 4</button>
+                          <button onClick={()=>{ setReaderFontFamily('serif'); try { localStorage.setItem('reader_font_family', 'serif') } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==='serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Serif</button>
+                          <button onClick={()=>{ setReaderFontFamily('sans-serif'); try { localStorage.setItem('reader_font_family', 'sans-serif') } catch { void 0 } }} className={`px-3 py-1 rounded-full ${readerFontFamily==='sans-serif'?'bg-amber-100 text-amber-700':'bg-gray-100 text-gray-700'} hover:scale-105 active:scale-95`}>Sans</button>
                         </div>
                       </div>
                       <div>
@@ -2609,7 +2615,7 @@ export default function Reader() {
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-slate-700 text-xs mb-1">文字大小（{readerFontSize}px）</label>
-                    <input type="range" min={12} max={28} step={1} value={readerFontSize} onChange={(e) => { const v = parseInt(e.target.value, 10); setReaderFontSize(v); try { localStorage.setItem('reader_font_size', String(v)) } catch { void 0 } }} className="w-full" />
+                    <input type="range" min={12} max={36} step={1} value={readerFontSize} onChange={(e) => { const v = parseInt(e.target.value, 10); setReaderFontSize(v); try { localStorage.setItem('reader_font_size', String(v)) } catch { void 0 } }} className="w-full" />
                   </div>
                   <div>
                     <label className="block text-slate-700 text-xs mb-1">字体</label>
