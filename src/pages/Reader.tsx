@@ -165,6 +165,7 @@ export default function Reader() {
   const [spotlightCompleted, setSpotlightCompleted] = useState<Set<string>>(new Set())
   const [spotlightTokenIndex, setSpotlightTokenIndex] = useState<number>(-1)
   const spotlightTimerRef = useRef<number | null>(null)
+  const cursorHideTimerRef = useRef<number | null>(null)
   const [spotlightWpm, setSpotlightWpm] = useState<number>(() => { try { const v = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('spotlight_wpm') || '' : ''), 10); const d = !isNaN(v) && v > 0 ? v : 120; return Math.max(40, Math.min(300, d)) } catch { return 120 } })
 
   const formatChapterTitle = (t: string) => {
@@ -279,6 +280,23 @@ export default function Reader() {
       setSpotlightTokenIndex(-1)
     }
   }, [currentParagraphIndex])
+
+  useEffect(() => {
+    const clearTimer = () => { if (cursorHideTimerRef.current) { clearTimeout(cursorHideTimerRef.current); cursorHideTimerRef.current = null } }
+    const showCursor = () => { try { document.body.style.cursor = '' } catch {} }
+    const hideCursor = () => { try { document.body.style.cursor = 'none' } catch {} }
+    const scheduleHide = () => { clearTimer(); cursorHideTimerRef.current = window.setTimeout(() => { if (spotlightMode) hideCursor() }, 2000) }
+    if (spotlightMode) {
+      showCursor()
+      scheduleHide()
+      const onMove = () => { showCursor(); scheduleHide() }
+      window.addEventListener('mousemove', onMove)
+      return () => { window.removeEventListener('mousemove', onMove); clearTimer(); showCursor() }
+    } else {
+      clearTimer()
+      showCursor()
+    }
+  }, [spotlightMode])
 
   const preloadNextParagraphContent = async () => {
     try {
@@ -2050,9 +2068,8 @@ export default function Reader() {
                           if (!isCurrent && currIdx < 0) return <span style={{ color: dim }}>{p.content}</span>
                           const sents = splitSentences(p.content || '')
                           return sents.map((s, i) => {
-                            if (i !== currIdx) return <span key={i} style={{ color: dim }}>{s}</span>
                             const tokens = Array.from(s.matchAll(/\S+/g))
-                            if (tokens.length === 0) return <span key={i}>{s}</span>
+                            if (tokens.length === 0) return <span key={i} style={{ color: i !== currIdx ? dim : undefined }}>{s}</span>
                             const nodes: any[] = []
                             let last = 0
                             let wordIdx = 0
@@ -2061,13 +2078,13 @@ export default function Reader() {
                               const end = start + m[0].length
                               if (start > last) nodes.push(<span key={`${i}-pre-${idx2}`}>{s.slice(last, start)}</span>)
                               const isWord = /[A-Za-z0-9\u4e00-\u9fff]/.test(m[0])
-                              const isCurrTok = isWord && (wordIdx === spotlightTokenIndex)
+                              const isCurrTok = (i === currIdx) && isWord && (wordIdx === spotlightTokenIndex)
                               nodes.push(<span key={`${i}-tok-${idx2}`} style={{ backgroundColor: isCurrTok ? highlightBg : 'transparent' }}>{m[0]}</span>)
                               if (isWord) wordIdx += 1
                               last = end
                             })
                             if (last < s.length) nodes.push(<span key={`${i}-tail`}>{s.slice(last)}</span>)
-                            return <span key={i}>{nodes}</span>
+                            return <span key={i} style={{ color: i !== currIdx ? dim : undefined }}>{nodes}</span>
                           })
                         })()
                       ) : p.content}
