@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuthStore } from '../store/auth'
 import { useBooksStore } from '../store/books'
 import { useNavigate } from 'react-router-dom'
@@ -330,6 +330,21 @@ export default function Home() {
     setBookToDelete(null)
   }
 
+  const sortedBooks = useMemo(() => {
+    const arr = [...books]
+    arr.sort((a, b) => {
+      const aUpdated = readingStatesCloud[a.id]?.updatedAt
+      const bUpdated = readingStatesCloud[b.id]?.updatedAt
+      const aTs = aUpdated ? new Date(aUpdated).getTime() : -1
+      const bTs = bUpdated ? new Date(bUpdated).getTime() : -1
+      if (bTs !== aTs) return bTs - aTs
+      const aBookTs = a.updated_at ? new Date(a.updated_at).getTime() : 0
+      const bBookTs = b.updated_at ? new Date(b.updated_at).getTime() : 0
+      return bBookTs - aBookTs
+    })
+    return arr
+  }, [books, readingStatesCloud])
+
   const submitChangePassword = async () => {
     setChangeError('')
     setChangeOk('')
@@ -448,7 +463,7 @@ export default function Home() {
                   </div>
                 </label>
               </div>
-              {books.map((book) => {
+              {sortedBooks.map((book) => {
                 const s = readingStatesCloud[book.id]
                 const ct = s ? chapterTitlesCloud[s.chapterId] || '' : ''
                 const chTotal = bookChapterCountsCloud[book.id] || 0
