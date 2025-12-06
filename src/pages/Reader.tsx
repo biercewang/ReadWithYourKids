@@ -229,6 +229,27 @@ export default function Reader() {
     }
   }
 
+  const retreatSpotlight = () => {
+    if (paragraphs.length === 0) return
+    const idx = currentParagraphIndex
+    const pid = getParagraphId(paragraphs[idx])
+    const text = paragraphs[idx]?.content || ''
+    const sentences = splitSentences(text)
+    const curr = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
+    if (!spotlightMode || curr < 0) {
+      setSpotlightMode(true)
+      setSpotlightSentenceMap(prev => ({ ...prev, [pid]: 0 }))
+      setSpotlightTokenIndex(-1)
+      return
+    }
+    const prev = curr - 1
+    if (prev >= 0) {
+      setSpotlightSentenceMap(prevMap => ({ ...prevMap, [pid]: prev }))
+      setSpotlightTokenIndex(-1)
+      return
+    }
+  }
+
   useEffect(() => {
     if (!spotlightMode) {
       if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null }
@@ -1793,10 +1814,18 @@ export default function Reader() {
       }
       if (e.key === 'ArrowLeft') {
         e.preventDefault()
-        handlePreviousParagraph()
+        if (spotlightMode) {
+          retreatSpotlight()
+        } else {
+          handlePreviousParagraph()
+        }
       } else if (e.key === 'ArrowRight') {
         e.preventDefault()
-        handleNextParagraph()
+        if (spotlightMode) {
+          advanceSpotlight()
+        } else {
+          handleNextParagraph()
+        }
       } else if (e.key === 'Enter') {
         e.preventDefault()
         advanceSpotlight()
@@ -1826,7 +1855,7 @@ export default function Reader() {
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [handlePreviousParagraph, handleNextParagraph, mergedStart, mergedEnd, paragraphs])
+  }, [handlePreviousParagraph, handleNextParagraph, mergedStart, mergedEnd, paragraphs, spotlightMode])
 
   useEffect(() => {
     try {
