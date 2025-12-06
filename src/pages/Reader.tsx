@@ -6,7 +6,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { translateAuto, translateStreamAuto, translateWithOpenRouter, translateWithOpenRouterStream, translateWithGemini, translateWithGeminiStream, generateImageWithOpenRouter, ttsWithDoubaoHttp, recognizeWithDoubaoFileStandard, recognizeWithDoubaoFile } from '../lib/ai'
 import { useImagesStore } from '../store/images'
 import { useAudiosStore } from '../store/audios'
-import { Volume2, Languages, Image, MessageSquare, BookOpen, ArrowLeft, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, MoreVertical, Info, Play, Square, Settings, RefreshCw, Brush, Type } from 'lucide-react'
+import { Volume2, Mic, Languages, Image, MessageSquare, BookOpen, ArrowLeft, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Trash2, MoreVertical, Info, Play, Square, Settings, RefreshCw, Brush, Type } from 'lucide-react'
 import { Paragraph, Image as ImgType } from '../types/database'
 import { useNotesStore } from '../store/notes'
 import { useTranslationsStore } from '../store/translations'
@@ -2112,19 +2112,12 @@ export default function Reader() {
             <button
               onClick={async ()=>{ if (isPlaying) { stopPlaying() } else { await tryPlayPreloaded(getCurrentParagraphId()); const a = currentAudio; if (a) { try { a.onended = async () => { setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }}
               className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
-              style={{ backgroundColor: isPlaying ? (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151') : (readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.9)' : '#FFFFFF'), color: isPlaying ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
+              style={{ backgroundColor: (isPlaying || isTtsPending) ? (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151') : (readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.9)' : '#FFFFFF'), color: (isPlaying || isTtsPending) ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
             >
               {isPlaying ? (
-                <Square className="h-5 w-5" />
+                <Mic className="h-5 w-5 animate-pulse" />
               ) : (
-                <div className="flex items-center">
-                  <Volume2 className="h-5 w-5" />
-                  <div className="ml-1 flex items-end space-x-0.5">
-                    {Array.from({ length: isPlaying ? 3 : 1 }).map((_, i) => (
-                      <span key={i} className="w-0.5 rounded-sm" style={{ height: `${6 + i * 4}px`, backgroundColor: (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151') }} />
-                    ))}
-                  </div>
-                </div>
+                <Volume2 className="h-5 w-5" />
               )}
             </button>
           </div>
