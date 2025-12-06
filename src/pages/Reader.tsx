@@ -169,6 +169,8 @@ export default function Reader() {
   const resumeFirstRef = useRef<boolean>(false)
   const cursorHideTimerRef = useRef<number | null>(null)
   const [spotlightWpm, setSpotlightWpm] = useState<number>(() => { try { const v = parseInt((typeof localStorage !== 'undefined' ? localStorage.getItem('spotlight_wpm') || '' : ''), 10); const d = !isNaN(v) && v > 0 ? v : 120; return Math.max(40, Math.min(300, d)) } catch { return 120 } })
+  const [hoverBottomPlay, setHoverBottomPlay] = useState<boolean>(false)
+  const [hoverBottomTts, setHoverBottomTts] = useState<boolean>(false)
   const paragraphJustSwitchedRef = useRef<boolean>(false)
 
   const formatChapterTitle = (t: string) => {
@@ -2163,7 +2165,7 @@ export default function Reader() {
             className="px-4 py-2 rounded-full backdrop-blur-lg shadow-lg ring-1 ring-black/5 flex items-center space-x-3"
             style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.12)', backgroundColor: readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.8)' : 'rgba(255,255,255,0.8)' }}
           >
-            <button onClick={()=>{ if (spotlightMode) { setSpotlightMode(false); setSpotlightTokenIndex(-1); if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } } else { const pid = getCurrentParagraphId(); if (pid) { setSpotlightMode(true); setSpotlightSentenceMap(prev => ({ ...prev, [pid]: typeof prev[pid] === 'number' && prev[pid] >= 0 ? prev[pid] : 0 })); setSpotlightCompleted(prev => { const s = new Set(prev); s.delete(pid); return s }); setSpotlightTokenIndex(-1) } } }} className="w-10 h-10 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none" style={{ backgroundColor: spotlightMode ? (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151') : (readerTheme === 'blackWhite' ? '#FFFFFF' : '#FFFFFF'), color: spotlightMode ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#374151' : '#374151') }}>
+            <button onMouseEnter={()=>setHoverBottomPlay(true)} onMouseLeave={()=>setHoverBottomPlay(false)} onClick={()=>{ if (spotlightMode) { setSpotlightMode(false); setSpotlightTokenIndex(-1); if (spotlightTimerRef.current) { clearTimeout(spotlightTimerRef.current); spotlightTimerRef.current = null } } else { const pid = getCurrentParagraphId(); if (pid) { setSpotlightMode(true); setSpotlightSentenceMap(prev => ({ ...prev, [pid]: typeof prev[pid] === 'number' && prev[pid] >= 0 ? prev[pid] : 0 })); setSpotlightCompleted(prev => { const s = new Set(prev); s.delete(pid); return s }); setSpotlightTokenIndex(-1) } } }} className="w-10 h-10 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none" style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverBottomPlay ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverBottomPlay ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverBottomPlay ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverBottomPlay ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverBottomPlay ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverBottomPlay ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return spotlightMode ? active : inactive })(), color: spotlightMode ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151') }}>
               {spotlightMode ? (<Square className="h-5 w-5" />) : (<Play className="h-5 w-5" />)}
             </button>
             <div
@@ -2186,9 +2188,11 @@ export default function Reader() {
               )}
             </div>
             <button
+              onMouseEnter={()=>setHoverBottomTts(true)}
+              onMouseLeave={()=>setHoverBottomTts(false)}
               onClick={async ()=>{ if (isPlaying) { stopPlaying() } else { await tryPlayPreloaded(getCurrentParagraphId()); const a = currentAudio; if (a) { try { a.onended = async () => { setCurrentAudio(null); setIsPlaying(false); await handleNextParagraph(); await tryPlayPreloaded(getCurrentParagraphId()) } } catch {} } } }}
               className="w-9 h-9 rounded-full inline-flex items-center justify-center hover:scale-105 active:scale-95 focus:outline-none"
-              style={{ backgroundColor: (isPlaying || isTtsPending) ? (readerTheme === 'yellow' ? '#F59E0B' : readerTheme === 'green' ? '#22C55E' : readerTheme === 'blackWhite' ? '#FFFFFF' : '#374151') : (readerTheme === 'blackWhite' ? 'rgba(75,85,99,0.9)' : '#FFFFFF'), color: (isPlaying || isTtsPending) ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
+              style={{ backgroundColor: (() => { const active = readerTheme === 'yellow' ? (hoverBottomTts ? '#F59E0B' : 'rgba(245,158,11,0.35)') : readerTheme === 'green' ? (hoverBottomTts ? '#22C55E' : 'rgba(34,197,94,0.35)') : readerTheme === 'blackWhite' ? (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.35)') : (hoverBottomTts ? '#374151' : 'rgba(55,65,81,0.35)'); const inactive = readerTheme === 'blackWhite' ? (hoverBottomTts ? 'rgba(75,85,99,0.9)' : 'rgba(75,85,99,0.25)') : (hoverBottomTts ? '#FFFFFF' : 'rgba(255,255,255,0.25)'); return (isPlaying || isTtsPending) ? active : inactive })(), color: (isPlaying || isTtsPending) ? (readerTheme === 'blackWhite' ? '#374151' : '#FFFFFF') : (readerTheme === 'blackWhite' ? '#F3F4F6' : '#374151' ) }}
             >
               {isPlaying ? (
                 <Mic className="h-5 w-5 animate-pulse" />
