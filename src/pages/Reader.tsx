@@ -221,6 +221,16 @@ export default function Reader() {
     return parts
   }
 
+  const normalizeTranslationText = (t: string): string => {
+    return String(t || '')
+      .replace(/\[\[S\d+\]\]\s*/g, ' ')
+      .replace(/<br\s*\/?>(\s*)/gi, ' ')
+      .replace(/[\r\n]+/g, ' ')
+      .replace(/[\u2028\u2029]+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+  }
+
   const advanceSpotlight = () => {
     if (paragraphs.length === 0) return
     const idx = currentParagraphIndex
@@ -2268,9 +2278,7 @@ export default function Reader() {
                       <div className="mt-3 whitespace-pre-wrap break-words" style={{ fontSize: Math.round(readerFontSize*0.95), lineHeight: 1.6, color: v2TextColor, fontFamily: translationFontFamily }}>
                         {(() => {
                           if (!spotlightMode) {
-                            const noMarks = tText.replace(/\[\[S\d+\]\]\s*/g, '')
-                            const singlePara = noMarks.replace(/\s*\n+\s*/g, ' ').replace(/\s{2,}/g, ' ').trim()
-                            return singlePara
+                            return normalizeTranslationText(tText)
                           }
                           const trs = parseMarkedTranslations(tText)
                           const currIdx = typeof spotlightSentenceMap[pid] === 'number' ? spotlightSentenceMap[pid] : -1
@@ -2484,7 +2492,7 @@ export default function Reader() {
                               <div className="flex-1 pr-2">
                                 <p className={`leading-relaxed ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'text-white' : (readerTheme === 'whiteBlack' ? 'text-black' : 'text-gray-800')} w-full whitespace-pre-wrap break-words`} style={{ fontSize: readerFontSize, fontFamily: readerFontFamily }}>{p.content}</p>
                                 {tText && (
-                                  <div className={`mt-4 rounded-md p-2 whitespace-pre-wrap break-words border ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'bg-white/10 text-white border-white/20' : 'bg-blue-50 text-blue-900 border-blue-200'}`} style={{ fontSize: Math.max(10, readerFontSize - 2), fontFamily: translationFontFamily }}>{tText}</div>
+                                  <div className={`mt-4 rounded-md p-2 whitespace-pre-wrap break-words border ${readerTheme === 'grayWhite' || readerTheme === 'blackWhite' || readerTheme === 'lightGrayWhite' ? 'bg-white/10 text-white border-white/20' : 'bg-blue-50 text-blue-900 border-blue-200'}`} style={{ fontSize: Math.max(10, readerFontSize - 2), fontFamily: translationFontFamily }}>{normalizeTranslationText(tText)}</div>
                                 )}
                                 {imgUrl && (
                                   <div className="mt-2 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
@@ -2868,7 +2876,7 @@ export default function Reader() {
                   if (tText && tText.length > 0) {
                     return (
                       <div className="mt-3 border border-blue-200 rounded-md p-3 bg-blue-50 text-xs text-blue-900 whitespace-pre-wrap break-words">
-                        <div style={{ ['WebkitLineClamp']: 2, ['WebkitBoxOrient']: 'vertical', overflow: 'hidden', display: '-webkit-box' }}>{tText}</div>
+                                  <div style={{ ['WebkitLineClamp']: 2, ['WebkitBoxOrient']: 'vertical', overflow: 'hidden', display: '-webkit-box' }}>{normalizeTranslationText(tText)}</div>
                       </div>
                     )
                   }
